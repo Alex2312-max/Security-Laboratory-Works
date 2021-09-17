@@ -1,0 +1,166 @@
+#
+# This script is Copyright (C) 2004-2021 and is owned by Tenable, Inc. or an Affiliate thereof.
+#
+# This script is released under the Tenable Subscription License and
+# may not be used from within scripts released under another license
+# without authorization from Tenable, Inc.
+#
+# See the following licenses for details:
+#
+# http://static.tenable.com/prod_docs/Nessus_6_SLA_and_Subscription_Agreement.pdf
+#
+# @PROFESSIONALFEED@
+# $Revision: 1.0 $
+# $Date: 2021/08/05 $
+#
+# Description : This document implements the security configuration as recommended by the
+#               CIS Google Kubernetes Engine (GKE) Benchmark
+#
+#<ui_metadata>
+#<display_name>CIS Google Kubernetes Engine (GKE) v1.1.0 L2 Worker</display_name>
+#<spec>
+#  <type>CIS</type>
+#  <name>Google Kubernetes Engine (GKE) v1.1.0 L2 Worker</name>
+#  <version>1.1.0</version>
+#  <link>https://workbench.cisecurity.org/files/2764</link>
+#</spec>
+#<labels>gke,kubernetes</labels>
+#<benchmark_refs>LEVEL,CSCv6,CSCv7,CIS_Recommendation</benchmark_refs>
+#<variables>
+#  <variable>
+#    <name>KUBELET_CONFIG</name>
+#    <default>/home/kubernetes/kubelet-config.yaml</default>
+#    <description>Kubelet config file path</description>
+#    <info>The location of the kubelet-config.yaml configuration file</info>
+#  </variable>
+#  <variable>
+#    <name>EVENT_QPS</name>
+#    <default>0</default>
+#    <description>Event QPS rate</description>
+#    <info>The Event QPS can be used to limit the rate at which events are gathered.</info>
+#  </variable>
+#</variables>
+#</ui_metadata>
+
+<check_type:"Unix">
+
+<if>
+  <condition type:"AND">
+    <custom_item>
+      type        : CMD_EXEC
+      description : "3.2.9 Ensure that the --event-qps argument is set to 0 or a level which ensures appropriate event capture"
+      cmd         : "ps -ef | grep kubelet | grep -v grep"
+      expect      : "--event-qps="
+    </custom_item>
+  </condition>
+
+  <then>
+    <custom_item>
+      system        : "Linux"
+      type          : CMD_EXEC
+      description   : "3.2.9 Ensure that the --event-qps argument is set to 0 or a level which ensures appropriate event capture"
+      info          : "Security relevant information should be captured. The --event-qps flag on the Kubelet can be used to limit the rate at which events are gathered. Setting this too low could result in relevant events not being logged, however the unlimited setting of 0 could result in a denial of service on the kubelet.
+
+Rationale:
+
+It is important to capture all events and not restrict event creation. Events are an important source of security information and analytics that ensure that your environment is consistently monitored using the event data."
+      solution      : "If using a Kubelet config file, edit the file to set eventRecordQPS: to an appropriate level.
+If using command line arguments, edit the kubelet service file /etc/systemd/system/kubelet.service.d/10-kubeadm.conf on each worker node and set the below parameter in KUBELET_SYSTEM_PODS_ARGS variable.
+Based on your system, restart the kubelet service. For example:
+
+systemctl daemon-reload
+systemctl restart kubelet.service
+
+Impact:
+
+Setting this parameter to 0 could result in a denial of service condition due to excessive events being created. The cluster's event processing and storage systems should be scaled to handle expected event loads.
+
+Default Value:
+
+See the GKE documentation for the default value."
+      reference     : "800-53|SC-5.,CIS_Recommendation|3.2.9,CSCv6|6,CSCv7|6,CSF|DE.CM-1,CSF|PR.DS-4,ITSG-33|SC-5,ITSG-33|SC-5a.,LEVEL|2S,NESA|T3.3.1,NIAv2|GS8e,NIAv2|GS10c,QCSC-v1|8.2.1"
+      see_also      : "https://workbench.cisecurity.org/files/2764"
+      cmd           : "ps -ef | grep kubelet | grep -v grep"
+# Note: Variable @EVENT_QPS@ replaced with "0" in field "expect".
+      expect        : "--event-qps=0([\\s]|$)"
+      dont_echo_cmd : YES
+    </custom_item>
+  </then>
+
+  <else>
+    <if>
+      <condition type:"AND">
+        <custom_item>
+          type        : CMD_EXEC
+          description : "Check if Kubelet config file is used"
+          cmd         : "ps -ef | grep kubelet | grep -v grep"
+# Note: Variable @KUBELET_CONFIG@ replaced with "/home/kubernetes/kubelet-config.yaml" in field "expect".
+          expect      : "--config[\\s]+/home/kubernetes/kubelet-config.yaml([\\s]|$)"
+        </custom_item>
+      </condition>
+
+      <then>
+        <custom_item>
+          system      : "Linux"
+          type        : FILE_CONTENT_CHECK
+          description : "3.2.9 Ensure that the --event-qps argument is set to 0 or a level which ensures appropriate event capture"
+          info        : "Security relevant information should be captured. The --event-qps flag on the Kubelet can be used to limit the rate at which events are gathered. Setting this too low could result in relevant events not being logged, however the unlimited setting of 0 could result in a denial of service on the kubelet.
+
+Rationale:
+
+It is important to capture all events and not restrict event creation. Events are an important source of security information and analytics that ensure that your environment is consistently monitored using the event data."
+          solution    : "If using a Kubelet config file, edit the file to set eventRecordQPS: to an appropriate level.
+If using command line arguments, edit the kubelet service file /etc/systemd/system/kubelet.service.d/10-kubeadm.conf on each worker node and set the below parameter in KUBELET_SYSTEM_PODS_ARGS variable.
+Based on your system, restart the kubelet service. For example:
+
+systemctl daemon-reload
+systemctl restart kubelet.service
+
+Impact:
+
+Setting this parameter to 0 could result in a denial of service condition due to excessive events being created. The cluster's event processing and storage systems should be scaled to handle expected event loads.
+
+Default Value:
+
+See the GKE documentation for the default value."
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|3.2.9,CN-L3|8.1.10.6(d),CSCv6|6,CSCv7|6,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2S,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/2764"
+# Note: Variable @KUBELET_CONFIG@ replaced with "/home/kubernetes/kubelet-config.yaml" in field "file".
+          file        : "/home/kubernetes/kubelet-config.yaml"
+          regex       : "^[\\s]*eventRecordQPS[\\s]*:"
+# Note: Variable @EVENT_QPS@ replaced with "0" in field "expect".
+          expect      : "^[\\s]*eventRecordQPS[\\s]*:[\\s]*0([\\s]|$)"
+        </custom_item>
+      </then>
+
+      <else>
+        <report type:"FAILED">
+          description : "3.2.9 Ensure that the --event-qps argument is set to 0 or a level which ensures appropriate event capture"
+          info        : "Security relevant information should be captured. The --event-qps flag on the Kubelet can be used to limit the rate at which events are gathered. Setting this too low could result in relevant events not being logged, however the unlimited setting of 0 could result in a denial of service on the kubelet.
+
+Rationale:
+
+It is important to capture all events and not restrict event creation. Events are an important source of security information and analytics that ensure that your environment is consistently monitored using the event data."
+          solution    : "If using a Kubelet config file, edit the file to set eventRecordQPS: to an appropriate level.
+If using command line arguments, edit the kubelet service file /etc/systemd/system/kubelet.service.d/10-kubeadm.conf on each worker node and set the below parameter in KUBELET_SYSTEM_PODS_ARGS variable.
+Based on your system, restart the kubelet service. For example:
+
+systemctl daemon-reload
+systemctl restart kubelet.service
+
+Impact:
+
+Setting this parameter to 0 could result in a denial of service condition due to excessive events being created. The cluster's event processing and storage systems should be scaled to handle expected event loads.
+
+Default Value:
+
+See the GKE documentation for the default value."
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|3.2.9,CN-L3|8.1.10.6(d),CSCv6|6,CSCv7|6,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2S,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/2764"
+        </report>
+      </else>
+    </if>
+  </else>
+</if>
+
+</check_type>

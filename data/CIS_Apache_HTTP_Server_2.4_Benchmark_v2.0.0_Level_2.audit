@@ -1,0 +1,2062 @@
+#
+# This script is Copyright (C) 2004-2021 and is owned by Tenable, Inc. or an Affiliate thereof.
+#
+# This script is released under the Tenable Subscription License and
+# may not be used from within scripts released under another license
+# without authorization from Tenable, Inc.
+#
+# See the following licenses for details:
+#
+# http://static.tenable.com/prod_docs/Nessus_6_SLA_and_Subscription_Agreement.pdf
+#
+# @PROFESSIONALFEED@
+# $Revision: 1.3 $
+# $Date: 2021/06/17 $
+#
+# Description   : This document implements the security configuration as recommended by the
+#                 CIS Apache HTTP Server 2.4 Benchmark v2.0.0
+#
+#<ui_metadata>
+#<display_name>CIS Apache HTTP Server 2.4 L2 v2.0.0</display_name>
+#<spec>
+#  <type>CIS</type>
+#  <name>Apache HTTP Server L2</name>
+#  <version>2.0.0</version>
+#  <link>https://workbench.cisecurity.org/files/3021</link>
+#</spec>
+#<labels>unix,cis,apache,apache_2,apache_2.4,webserver,agent</labels>
+#<benchmark_refs>LEVEL,CSCv6,CSCv7,CIS_Recommendation</benchmark_refs>
+#<variables>
+#  <variable>
+#    <name>APACHECTL_LOCATION</name>
+#    <default>/usr/sbin/apachectl</default>
+#    <description>Apache Control Location</description>
+#    <info>The path to the binary for Apache Control.</info>
+#  </variable>
+#  <variable>
+#    <name>HTTPD_LOCATION</name>
+#    <default>/usr/sbin/httpd</default>
+#    <description>Apache Binary Location</description>
+#    <info>The path to the binary for the Apache server. Defaults to 'httpd', but could be 'apache2' on some platforms.</info>
+#  </variable>
+#  <variable>
+#    <name>HTTPD_NAME</name>
+#    <default>Apache</default>
+#    <description>Apache server binary name</description>
+#    <info>The name of the binary for the Apache server. Defaults to 'Apache'.</info>
+#  </variable>
+#  <variable>
+#    <name>HTTPD_CONF_LOCATION</name>
+#    <default>/etc/httpd/conf/httpd.conf</default>
+#    <description>Apache configuration file location</description>
+#    <info>The path to the config for the Apache server. Defaults to /etc/httpd/conf/httpd.conf or /etc/apache2/apache2.conf depending on OS.</info>
+#  </variable>
+#  <variable>
+#    <name>APPROVED_EXTENSIONS</name>
+#    <default>css|html\?|js|pdf|txt|xml|xsl|gif|ico|jpe\?g|png</default>
+#    <description>Approved file extensions</description>
+#    <info>The list of file extensions that are approved to be served by the Apache server.</info>
+#  </variable>
+#  <variable>
+#    <name>OWASP_CRS_DIR</name>
+#    <default>/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0</default>
+#    <description>OWASP Core RuleSet (CRS) Directory</description>
+#    <info>The directory where OWASP Core RuleSet is installed.</info>
+#  </variable>
+#  <variable>
+#    <name>REWRITE_URL</name>
+#    <default>www\\\\.example\\\\.com</default>
+#    <description>Rewrite URL</description>
+#    <info>Mod_rewrite can be used to disallow access for requests that use an IP address instead of a host name for the URL. This item defines the URL that will be used instead of requests for the Apache server IP address.</info>
+#  </variable>
+#</variables>
+#</ui_metadata>
+
+<check_type:"Unix">
+
+<if>
+  <condition type:"AND">
+    <custom_item>
+      type        : CMD_EXEC
+      description : "Apache found"
+# Note: Variable @HTTPD_LOCATION@ replaced with "/usr/sbin/httpd" in field "cmd".
+      cmd         : "/usr/sbin/httpd -version"
+# Note: Variable @HTTPD_NAME@ replaced with "Apache" in field "expect".
+      expect      : "Apache/2.4.*"
+    </custom_item>
+  </condition>
+
+  <then>
+    <report type:"PASSED">
+      description : "CIS_Apache_HTTP_Server_2.4_Benchmark_v2.0.0.audit from CIS Apache HTTP Server 2.4 Benchark v2.0.0"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+    </report>
+
+    <custom_item>
+      system      : "Linux"
+      type        : CMD_EXEC
+      description : "5.11 Ensure Access to Inappropriate File Extensions Is Restricted - 'httpd.conf FileMatch directive'"
+      info        : "Restrict access to inappropriate file extensions that are not expected to be a legitimate part of web sites using the FilesMatch directive.
+
+Rationale:
+
+There are many files that are often left within the web server document root that could provide an attacker with sensitive information. Most often these files are mistakenly left behind after installation, trouble-shooting, or backing up files before editing. Regardless of the reason for their creation, these files can still be served by Apache even when there is no hyperlink pointing to them. The web administrators should use the FilesMatch directive to restrict access to only those file extensions that are appropriate for the web server. Rather than create a list of potentially inappropriate file extensions such as .bak, .config, .old, etc, it is recommended instead that a white list of the appropriate and expected file extensions for the web server be created, reviewed and restricted with a FilesMatch directive."
+      solution    : "Perform the following to implement the recommended state:
+
+Compile a list of existing file extension on the web server. The following find/awk command may be useful, but is likely to need some customization according to the appropriate webroot directories for your web server. Please note that the find command skips over any files without a dot (.) in the file name, as these are not expected to be appropriate web content.
+
+find */htdocs -type f -name '*.*' | /usr/bin/awk -F. '{print $NF }' | sort -u
+
+Review the list of existing file extensions, for appropriate content for the web server, remove those that are inappropriate and add any additional file extensions expected to be added to the web server in the near future.
+
+Add the FilesMatch directive below which denies access to all files by default.
+
+# Block all files by default, unless specifically allowed.
+<FilesMatch '^.*$'>
+    Require all denied
+</FilesMatch>
+
+Add another a FilesMatch directive that allows access to those file extensions specifically allowed from the review process in step 2. An example FilesMatch directive is below. The file extensions in the regular expression should match your approved list, and not necessarily the expression below.
+
+# Allow files with specifically approved file extensions
+# Such as (css, htm; html; js; pdf; txt; xml; xsl; ...),
+# images (gif; ico; jpeg; jpg; png; ...), multimedia
+<FilesMatch '^.*\.(css|html?|js|pdf|txt|xml|xsl|gif|ico|jpe?g|png)$'>
+    Require all granted
+</FilesMatch>
+
+Default Value:
+
+There are no restrictions on file extensions in the default configuration."
+      reference   : "800-171|3.4.8,800-53|CM-7(4),CIS_Recommendation|5.11,CSCv6|18.3,CSCv7|18.2,CSF|PR.IP-1,CSF|PR.PT-3,ISO/IEC-27001|A.12.6.2,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS13a,QCSC-v1|3.2,SWIFT-CSCv1|2.3,TBA-FIISB|44.2.2,TBA-FIISB|49.2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "cmd".
+      cmd         : "/usr/bin/sed -n '/<FilesMatch \"\\^\\\.\\*\\\$\"/,/<\\\/FilesMatch>/p' /etc/httpd/conf/httpd.conf | /usr/bin/egrep '^\\s*Require\\s+'"
+      expect      : "^[\\s]*Require[\\s]+[Aa]ll[\\s]*[Dd]enied[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "5.11 Ensure Access to Inappropriate File Extensions Is Restricted - 'httpd.conf approved extention FileMatch directive exists'"
+      info        : "Restrict access to inappropriate file extensions that are not expected to be a legitimate part of web sites using the FilesMatch directive.
+
+Rationale:
+
+There are many files that are often left within the web server document root that could provide an attacker with sensitive information. Most often these files are mistakenly left behind after installation, trouble-shooting, or backing up files before editing. Regardless of the reason for their creation, these files can still be served by Apache even when there is no hyperlink pointing to them. The web administrators should use the FilesMatch directive to restrict access to only those file extensions that are appropriate for the web server. Rather than create a list of potentially inappropriate file extensions such as .bak, .config, .old, etc, it is recommended instead that a white list of the appropriate and expected file extensions for the web server be created, reviewed and restricted with a FilesMatch directive."
+      solution    : "Perform the following to implement the recommended state:
+
+Compile a list of existing file extension on the web server. The following find/awk command may be useful, but is likely to need some customization according to the appropriate webroot directories for your web server. Please note that the find command skips over any files without a dot (.) in the file name, as these are not expected to be appropriate web content.
+
+find */htdocs -type f -name '*.*' | /usr/bin/awk -F. '{print $NF }' | sort -u
+
+Review the list of existing file extensions, for appropriate content for the web server, remove those that are inappropriate and add any additional file extensions expected to be added to the web server in the near future.
+
+Add the FilesMatch directive below which denies access to all files by default.
+
+# Block all files by default, unless specifically allowed.
+<FilesMatch '^.*$'>
+    Require all denied
+</FilesMatch>
+
+Add another a FilesMatch directive that allows access to those file extensions specifically allowed from the review process in step 2. An example FilesMatch directive is below. The file extensions in the regular expression should match your approved list, and not necessarily the expression below.
+
+# Allow files with specifically approved file extensions
+# Such as (css, htm; html; js; pdf; txt; xml; xsl; ...),
+# images (gif; ico; jpeg; jpg; png; ...), multimedia
+<FilesMatch '^.*\.(css|html?|js|pdf|txt|xml|xsl|gif|ico|jpe?g|png)$'>
+    Require all granted
+</FilesMatch>
+
+Default Value:
+
+There are no restrictions on file extensions in the default configuration."
+      reference   : "800-171|3.4.8,800-53|CM-7(5),CIS_Recommendation|5.11,CSCv6|18.3,CSCv7|18.2,CSF|PR.IP-1,CSF|PR.PT-3,ISO/IEC-27001|A.12.5.1,ISO/IEC-27001|A.12.6.2,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,QCSC-v1|3.2,SWIFT-CSCv1|2.3,TBA-FIISB|44.2.2,TBA-FIISB|49.2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+# Note: Variable @APPROVED_EXTENSIONS@ replaced with "css|html\\?|js|pdf|txt|xml|xsl|gif|ico|jpe\\?g|png" in field "regex".
+      regex       : "^[\\s]*<FilesMatch \"\\^\\.\\*\\\\\.\\(css|html\\?|js|pdf|txt|xml|xsl|gif|ico|jpe\\?g|png\\)\\\$\""
+# Note: Variable @APPROVED_EXTENSIONS@ replaced with "css|html\\?|js|pdf|txt|xml|xsl|gif|ico|jpe\\?g|png" in field "expect".
+      expect      : "^[\\s]*<FilesMatch \"\\^\\.\\*\\\\\.\\(css|html\\?|js|pdf|txt|xml|xsl|gif|ico|jpe\\?g|png\\)\\\$\""
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "5.12 Ensure IP Address Based Requests Are Disallowed - 'httpd.conf RewriteEngine = on'"
+      info        : "The Apache module mod_rewrite can be used to disallow access for requests that use an IP address instead of a host name for the URL. Most normal access to the website from browsers and automated software will use a host name which will therefore include the host name in the HTTP HOST header.
+
+Rationale:
+
+A common malware propagation and automated network scanning technique is to use IP addresses rather than host names for web requests, since it's much simpler to automate. By denying IP based web requests, these automated techniques will be denied access to the website. Of course, malicious web scanning techniques continue to evolve, and many are now using hostnames, however denying access to the IP based requests is still a worthwhile defense."
+      solution    : "Perform the following to implement the recommended state:
+
+Load the mod_rewrite module for Apache by doing either one of the following:
+
+Build Apache with mod_rewrite statically loaded during the build, by adding the --enable-rewrite option to the ./configure script.
+
+./configure --enable-rewrite
+
+Or, dynamically loading the module with the LoadModule directive in the httpd.conf configuration file.
+
+LoadModule rewrite_module modules/mod_rewrite.so
+
+Add the RewriteEngine directive to the configuration within the global server context with the value of on so that the rewrite engine is enabled.
+
+RewriteEngine On
+
+Locate the Apache configuration file such as httpd.conf and add the following rewrite condition to match the expected host name of the top server level configuration.
+
+RewriteCond %{HTTP_HOST} !^www\.example\.com [NC]
+RewriteCond %{REQUEST_URI} !^/error [NC]
+RewriteRule ^.(.*) - [L,F]
+
+Default Value:
+
+RewriteEngine off"
+      reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|5.12,CN-L3|8.1.10.6(d),CSCv6|9.1,CSCv7|9.2,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*RewriteEngine[\\s]*"
+      expect      : "^[\\s]*RewriteEngine[\\s]+On[\\s]*"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "5.12 Ensure IP Address Based Requests Are Disallowed - 'httpd.conf RewriteCond %{HTTP_HOST} exists'"
+      info        : "The Apache module mod_rewrite can be used to disallow access for requests that use an IP address instead of a host name for the URL. Most normal access to the website from browsers and automated software will use a host name which will therefore include the host name in the HTTP HOST header.
+
+Rationale:
+
+A common malware propagation and automated network scanning technique is to use IP addresses rather than host names for web requests, since it's much simpler to automate. By denying IP based web requests, these automated techniques will be denied access to the website. Of course, malicious web scanning techniques continue to evolve, and many are now using hostnames, however denying access to the IP based requests is still a worthwhile defense."
+      solution    : "Perform the following to implement the recommended state:
+
+Load the mod_rewrite module for Apache by doing either one of the following:
+
+Build Apache with mod_rewrite statically loaded during the build, by adding the --enable-rewrite option to the ./configure script.
+
+./configure --enable-rewrite
+
+Or, dynamically loading the module with the LoadModule directive in the httpd.conf configuration file.
+
+LoadModule rewrite_module modules/mod_rewrite.so
+
+Add the RewriteEngine directive to the configuration within the global server context with the value of on so that the rewrite engine is enabled.
+
+RewriteEngine On
+
+Locate the Apache configuration file such as httpd.conf and add the following rewrite condition to match the expected host name of the top server level configuration.
+
+RewriteCond %{HTTP_HOST} !^www\.example\.com [NC]
+RewriteCond %{REQUEST_URI} !^/error [NC]
+RewriteRule ^.(.*) - [L,F]
+
+Default Value:
+
+RewriteEngine off"
+      reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|5.12,CN-L3|8.1.10.6(d),CSCv6|9.1,CSCv7|9.2,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*RewriteCond[\\s]+"
+# Note: Variable @REWRITE_URL@ replaced with "www\\\\\\\\.example\\\\\\\\.com" in field "expect".
+      expect      : "^[\\s]*RewriteCond[\\s]+%{HTTP_HOST}[\\s]+!\\^www\\\\\\\\.example\\\\\\\\.com[\\s]+\[NC\]"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "5.12 Ensure IP Address Based Requests Are Disallowed - 'httpd.conf RewriteCond %{REQUEST_URI} exists'"
+      info        : "The Apache module mod_rewrite can be used to disallow access for requests that use an IP address instead of a host name for the URL. Most normal access to the website from browsers and automated software will use a host name which will therefore include the host name in the HTTP HOST header.
+
+Rationale:
+
+A common malware propagation and automated network scanning technique is to use IP addresses rather than host names for web requests, since it's much simpler to automate. By denying IP based web requests, these automated techniques will be denied access to the website. Of course, malicious web scanning techniques continue to evolve, and many are now using hostnames, however denying access to the IP based requests is still a worthwhile defense."
+      solution    : "Perform the following to implement the recommended state:
+
+Load the mod_rewrite module for Apache by doing either one of the following:
+
+Build Apache with mod_rewrite statically loaded during the build, by adding the --enable-rewrite option to the ./configure script.
+
+./configure --enable-rewrite
+
+Or, dynamically loading the module with the LoadModule directive in the httpd.conf configuration file.
+
+LoadModule rewrite_module modules/mod_rewrite.so
+
+Add the RewriteEngine directive to the configuration within the global server context with the value of on so that the rewrite engine is enabled.
+
+RewriteEngine On
+
+Locate the Apache configuration file such as httpd.conf and add the following rewrite condition to match the expected host name of the top server level configuration.
+
+RewriteCond %{HTTP_HOST} !^www\.example\.com [NC]
+RewriteCond %{REQUEST_URI} !^/error [NC]
+RewriteRule ^.(.*) - [L,F]
+
+Default Value:
+
+RewriteEngine off"
+      reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|5.12,CN-L3|8.1.10.6(d),CSCv6|9.1,CSCv7|9.2,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*RewriteCond[\\s]+"
+      expect      : "^[\\s]*RewriteCond[\\s]+%{REQUEST_URI}[\\s]+!\\^\\/error[\\s]+\[NC\]"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "5.12 Ensure IP Address Based Requests Are Disallowed - [L,F] exists'"
+      info        : "The Apache module mod_rewrite can be used to disallow access for requests that use an IP address instead of a host name for the URL. Most normal access to the website from browsers and automated software will use a host name which will therefore include the host name in the HTTP HOST header.
+
+Rationale:
+
+A common malware propagation and automated network scanning technique is to use IP addresses rather than host names for web requests, since it's much simpler to automate. By denying IP based web requests, these automated techniques will be denied access to the website. Of course, malicious web scanning techniques continue to evolve, and many are now using hostnames, however denying access to the IP based requests is still a worthwhile defense."
+      solution    : "Perform the following to implement the recommended state:
+
+Load the mod_rewrite module for Apache by doing either one of the following:
+
+Build Apache with mod_rewrite statically loaded during the build, by adding the --enable-rewrite option to the ./configure script.
+
+./configure --enable-rewrite
+
+Or, dynamically loading the module with the LoadModule directive in the httpd.conf configuration file.
+
+LoadModule rewrite_module modules/mod_rewrite.so
+
+Add the RewriteEngine directive to the configuration within the global server context with the value of on so that the rewrite engine is enabled.
+
+RewriteEngine On
+
+Locate the Apache configuration file such as httpd.conf and add the following rewrite condition to match the expected host name of the top server level configuration.
+
+RewriteCond %{HTTP_HOST} !^www\.example\.com [NC]
+RewriteCond %{REQUEST_URI} !^/error [NC]
+RewriteRule ^.(.*) - [L,F]
+
+Default Value:
+
+RewriteEngine off"
+      reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|5.12,CN-L3|8.1.10.6(d),CSCv6|9.1,CSCv7|9.2,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*RewriteRule[\\s]+"
+      expect      : "^[\\s]*RewriteRule[\\s]+\\^\\\.\\(\\\.\\*\\)[\\s]+-[\\s]+\[L,F\]"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK_NOT
+      description : "5.13 Ensure the IP Addresses for Listening for Requests Are Specified - 'httpd.conf Listen 0.0.0.0:80 does not exists'"
+      info        : "The Apache Listen directive specifies the IP addresses and port numbers the Apache web server will listen for requests. Rather than be unrestricted to listen on all IP addresses available to the system, the specific IP address or addresses intended should be explicitly specified. Specifically, a Listen directive with no IP address specified, or with an IP address of zeros should not be used.
+
+Rationale:
+
+Having multiple interfaces on web servers is fairly common, and without explicit Listen directives, the web server is likely to be listening on an inappropriate IP address / interface that was not intended for the web server. Single homed system with a single IP addressed are also required to have an explicit IP address in the Listen directive, in case additional interfaces are added to the system at a later date."
+      solution    : "Perform the following to implement the recommended state:
+
+Find any Listen directives in the Apache configuration file with no IP address specified, or with an IP address of all zeros similar to the examples below. Keep in mind there may be both IPv4 and IPv6 addresses on the system.
+
+Listen 80
+Listen 0.0.0.0:80
+Listen [::ffff:0.0.0.0]:80
+
+Modify the Listen directives in the Apache configuration file to have explicit IP addresses according to the intended usage. Multiple Listendirectives may be specified for each IP address & Port.
+
+Listen 10.1.2.3:80
+Listen 192.168.4.5:80
+Listen [2001:db8::a00:20ff:fea7:ccea]:80
+
+Default Value:
+
+Listen 80"
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-53|CM-7b.,CIS_Recommendation|5.13,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv6|9.1,CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*Listen[\\s]+"
+      expect      : "^[\\s]*Listen[\\s]+(.*0\\.0\\.0\\.0.*:)?80[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK_NOT
+      description : "5.13 Ensure the IP Addresses for Listening for Requests Are Specified - 'httpd.conf Listen [::ffff:0.0.0.0]:80 does not exists'"
+      info        : "The Apache Listen directive specifies the IP addresses and port numbers the Apache web server will listen for requests. Rather than be unrestricted to listen on all IP addresses available to the system, the specific IP address or addresses intended should be explicitly specified. Specifically, a Listen directive with no IP address specified, or with an IP address of zeros should not be used.
+
+Rationale:
+
+Having multiple interfaces on web servers is fairly common, and without explicit Listen directives, the web server is likely to be listening on an inappropriate IP address / interface that was not intended for the web server. Single homed system with a single IP addressed are also required to have an explicit IP address in the Listen directive, in case additional interfaces are added to the system at a later date."
+      solution    : "Perform the following to implement the recommended state:
+
+Find any Listen directives in the Apache configuration file with no IP address specified, or with an IP address of all zeros similar to the examples below. Keep in mind there may be both IPv4 and IPv6 addresses on the system.
+
+Listen 80
+Listen 0.0.0.0:80
+Listen [::ffff:0.0.0.0]:80
+
+Modify the Listen directives in the Apache configuration file to have explicit IP addresses according to the intended usage. Multiple Listendirectives may be specified for each IP address & Port.
+
+Listen 10.1.2.3:80
+Listen 192.168.4.5:80
+Listen [2001:db8::a00:20ff:fea7:ccea]:80
+
+Default Value:
+
+Listen 80"
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-53|CM-7b.,CIS_Recommendation|5.13,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv6|9.1,CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*Listen[\\s]+"
+      expect      : "^[\\s]*Listen[\\s]+\[::ffff:0\\.0\\.0\\.0\]:80[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "5.14 Ensure Browser Framing Is Restricted"
+      info        : "To prevent Clickjacking or UI Redressing attacks, it's important for the server to include an HTTP header which instructs browsers to restrict the content from being framed. There are two headers that may be used. The Content-Security-Policy header, or the X-Frame-Options header. The Header directive allows server HTTP response headers to be added, replaced or merged. We will use the directive to add a server HTTP response header to tell browsers to restrict all of the web pages from being framed by other web sites.
+
+Rationale:
+
+Using iframes and regular web frames to embed malicious content along with expected web content has been a favored attack vector for attacking web clients for a long time. This can happen when the attacker lures the victim to a malicious web site, which uses frames to include the expected content from the legitimate site. The attack can also be performed via XSS (either reflected, DOM or stored XSS) to add the malicious content to the legitimate web site.
+
+To combat this attack vector, either an X-Frame-Options response header or a Content-Security-Policy response header may be used. The Content-Security-Policy header is the preferred solution. The X-Frame-Options header should have a value of either DENY, which prevents all framing, or SAMEORIGIN which prevents framing except via pages which share the same origin. The Content-Security-Policy header may also be to restrict framing with a frame-ancestors directive and a value of none or self"
+      solution    : "Perform the following to implement the recommended state:
+
+Add or modify the Header directive for the Content-Security-Policy header in the Apache configuration to have the condition always, an action of append and a value of frame-ancestors self, as shown below.
+
+Header always append 'Content-Security-Policy frame-ancestors self'
+
+Default Value:
+
+Neither the Content-Security-Policy HTTP response header nor the X-Frame-Options header is generated by default."
+      reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|5.14,CN-L3|8.1.10.6(d),CSCv6|18,CSCv7|5.1,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*.+X-Frame-Options[\\s]+"
+      expect      : "^[\\s]*Header[\\s]+[Aa]lways[\\s]+([Aa]ppend|[Ss]et)[\\s]+X-Frame-Options[\\s]+(SAMEORIGIN|DENY)[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "6.2 Ensure a Syslog Facility Is Configured for Error Logging - 'Main'"
+      info        : "The ErrorLog directive should be configured to send logs to a syslog facility so that the logs can be processed and monitored along with the system logs.
+
+Rationale:
+
+It is easy for the web server error logs to be overlooked in the log monitoring process, and yet the application level attacks have become the most common and are extremely important for detecting attacks early, as well as detecting non-malicious problems such as a broken link, or internal errors. By including the Apache error logs with the system logging facility, the application logs are more likely to be included in the established log monitoring process."
+      solution    : "Perform the following to implement the recommended state:
+
+Add an ErrorLog directive if not already configured. Any appropriate syslog facility may be used in place of local1.
+
+ErrorLog 'syslog:local1'
+
+Add a similar ErrorLog directive for each virtual host if necessary.
+
+Default Value:
+
+The following is the default configuration:
+
+ErrorLog 'logs/error_log'"
+      reference   : "800-171|3.3.1,800-171|3.3.2,800-53|AU-12c.,CIS_Recommendation|6.2,CN-L3|7.1.3.3(a),CN-L3|7.1.3.3(b),CN-L3|7.1.3.3(c),CN-L3|8.1.3.5(a),CN-L3|8.1.3.5(b),CN-L3|8.1.4.3(a),CSCv6|6.6,CSCv7|6.6,CSCv7|6.8,CSF|DE.CM-1,CSF|DE.CM-3,CSF|DE.CM-7,CSF|PR.PT-1,ISO/IEC-27001|A.12.4.1,ITSG-33|AU-12c.,LEVEL|2A,NESA|T3.6.2,NESA|T3.6.5,NESA|T3.6.6,NIAv2|SM8,QCSC-v1|3.2,QCSC-v1|6.2,QCSC-v1|8.2.1,QCSC-v1|13.2,SWIFT-CSCv1|6.4,TBA-FIISB|45.1.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*ErrorLog[\\s]+"
+      expect      : "^[\\s]*ErrorLog[\\s]+\"syslog:\.\*\"[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : CMD_EXEC
+      description : "6.2 Ensure a Syslog Facility Is Configured for Error Logging - 'VirtualHost'"
+      info        : "The ErrorLog directive should be configured to send logs to a syslog facility so that the logs can be processed and monitored along with the system logs.
+
+Rationale:
+
+It is easy for the web server error logs to be overlooked in the log monitoring process, and yet the application level attacks have become the most common and are extremely important for detecting attacks early, as well as detecting non-malicious problems such as a broken link, or internal errors. By including the Apache error logs with the system logging facility, the application logs are more likely to be included in the established log monitoring process.
+
+NOTE: Nessus has provided the target output to assist in reviewing the benchmark to ensure target compliance."
+      solution    : "Perform the following to implement the recommended state:
+
+Add an ErrorLog directive if not already configured. Any appropriate syslog facility may be used in place of local1.
+
+ErrorLog 'syslog:local1'
+
+Add a similar ErrorLog directive for each virtual host if necessary.
+
+Default Value:
+
+The following is the default configuration:
+
+ErrorLog 'logs/error_log'"
+      reference   : "800-171|3.3.1,800-171|3.3.2,800-53|AU-12c.,CIS_Recommendation|6.2,CN-L3|7.1.3.3(a),CN-L3|7.1.3.3(b),CN-L3|7.1.3.3(c),CN-L3|8.1.3.5(a),CN-L3|8.1.3.5(b),CN-L3|8.1.4.3(a),CSCv6|6.6,CSCv7|6.6,CSCv7|6.8,CSF|DE.CM-1,CSF|DE.CM-3,CSF|DE.CM-7,CSF|PR.PT-1,ISO/IEC-27001|A.12.4.1,ITSG-33|AU-12c.,LEVEL|2A,NESA|T3.6.2,NESA|T3.6.5,NESA|T3.6.6,NIAv2|SM8,QCSC-v1|3.2,QCSC-v1|6.2,QCSC-v1|8.2.1,QCSC-v1|13.2,SWIFT-CSCv1|6.4,TBA-FIISB|45.1.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "cmd".
+      cmd         : "/usr/bin/egrep '^[\\s]*(<VirtualHost|ErrorLog)' /etc/httpd/conf/httpd.conf"
+      expect      : ""
+      severity    : MEDIUM
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : CMD_EXEC
+      description : "6.6 Ensure ModSecurity Is Installed and Enabled"
+      info        : "ModSecurity is an open source web application firewall (WAF) for real-time web application monitoring, logging, and access control. It enables but does not include a powerful customizable rule set, which may be used to detect and block common web application attacks. Installation of ModSecurity without a rule set does not provide additional security for the protected web applications. Refer to the benchmark recommendation 'Install and Enable OWASP ModSecurity Core Rule Set' for details on a recommended rule set.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installation of the ModSecurity Apache module enables a customizable web application firewall rule set which may be configured to detect and block common attack patterns as well as block outbound data leakage."
+      solution    : "Install the ModSecurity module if it is not already installed in modules/mod_security2.so. It may be installed via OS package installation (such as apt-get or yum) or built from the source files. See https://www.modsecurity.org/download.html for details.
+
+Add or modify the LoadModule directive if not already present in the Apache configuration as shown below. Typically, the LoadModule directive is placed in file named mod_security.conf which is included in the Apache configuration:
+
+LoadModule security2_module modules/mod_security2.so
+
+Default Value:
+
+The ModSecurity module is NOT loaded by default."
+      reference   : "800-171|3.13.1,800-53|SC-7(12),CIS_Recommendation|6.6,CN-L3|8.1.10.6(j),CSCv6|18.2,CSCv7|18.10,CSF|DE.CM-1,CSF|PR.AC-5,CSF|PR.DS-5,CSF|PR.PT-4,ISO/IEC-27001|A.13.1.3,ITSG-33|SC-7(12),LEVEL|2A,NESA|T4.5.4,NIAv2|AM38,NIAv2|SS13d,NIAv2|SS26,QCSC-v1|5.2.1,QCSC-v1|5.2.2,QCSC-v1|6.2,QCSC-v1|8.2.1,TBA-FIISB|43.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_LOCATION@ replaced with "/usr/sbin/httpd" in field "cmd".
+      cmd         : "/usr/sbin/httpd -M | /usr/bin/egrep 'security2_module' | /usr/bin/awk '{print} END {if (NR == 0) print \"none\"}'"
+      expect      : "none"
+    </custom_item>
+
+    <if>
+      <condition type:"AND">
+        <custom_item>
+          type        : CMD_EXEC
+          description : "Check if OWASP CRS 3"
+# Note: Variable @OWASP_CRS_DIR@ replaced with "/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0" in field "cmd".
+          cmd         : "echo '/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0'"
+          expect      : "crs-3"
+        </custom_item>
+      </condition>
+
+      <then>
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Active Rules"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @OWASP_CRS_DIR@ replaced with "/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0" in field "cmd".
+          cmd         : "find '/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0' -name '*.conf' | xargs /usr/bin/grep '^SecRule ' | wc -l"
+          expect      : "(32[5-9]|3[3-9][0-9]|[4-9][0-9][0-9])"
+        </custom_item>
+
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Inbound Anomaly Threshold"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @OWASP_CRS_DIR@ replaced with "/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0" in field "cmd".
+          cmd         : "find '/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0' -name '*.conf' | xargs /usr/bin/egrep -v '^\s*#' | /usr/bin/grep 'setvar:tx.inbound_anomaly_score_threshold'"
+          expect      : "setvar:tx.inbound_anomaly_score_threshold[\\s]*=[\\s]*[2-5][^0-9]"
+        </custom_item>
+
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Outbound Anomaly Threshold"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @OWASP_CRS_DIR@ replaced with "/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0" in field "cmd".
+          cmd         : "find '/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0' -name '*.conf' | xargs /usr/bin/egrep -v '^\s*#' | /usr/bin/grep 'setvar:tx.outbound_anomaly_score_threshold'"
+          expect      : "setvar:tx.outbound_anomaly_score_threshold[\\s]*=[\\s]*[2-4][^0-9]"
+        </custom_item>
+
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Paranoia Level"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @OWASP_CRS_DIR@ replaced with "/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0" in field "cmd".
+          cmd         : "find '/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0' -name '*.conf' | xargs /usr/bin/egrep -v '^\s*#' | /usr/bin/grep 'setvar:tx.paranoia_level'"
+          expect      : "setvar:tx.paranoia_level[\\s]*=[\\s]*1[^0-9]"
+        </custom_item>
+      </then>
+
+      <else>
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Active Rules"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @OWASP_CRS_DIR@ replaced with "/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0" in field "cmd".
+          cmd         : "find '/etc/httpd/modsecurity.d/owasp-modsecurity-crs-3.0.0' -name 'modsecurity_crs_*.conf' | xargs /usr/bin/grep '^SecRule ' | wc -l"
+          expect      : "[2-9][0-9][0-9]"
+        </custom_item>
+
+        <report type:"PASSED">
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Inbound Anomaly Threshold"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Outbound Anomaly Threshold"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "6.7 Ensure the OWASP ModSecurity Core Rule Set Is Installed and Enabled - Paranoia Level"
+          info        : "The OWASP ModSecurity Core Rules Set (CRS) is a set of open source web application defensive rules for the ModSecurity web application firewall (WAF). The OWASP ModSecurity CRS provides baseline protections in the following attack/threat categories:
+
+HTTP Protection - detecting violations of the HTTP protocol and a locally defined usage policy.
+
+Real-time Blacklist Lookups - utilizes 3rd Party IP Reputation
+
+HTTP Denial of Service Protections - defense against HTTP Flooding and Slow HTTP DoS Attacks.
+
+Common Web Attacks Protection - detecting common web application security attack.
+
+Automation Detection - detecting bots, crawlers, scanners and other surface malicious activity.
+
+Integration with AV Scanning for File Uploads - detects malicious files uploaded through the web application.
+
+Tracking Sensitive Data - tracks credit card usage and blocks leakages.
+
+Trojan Protection - detecting access to trojan horses.
+
+Identification of Application Defects - alerts on application misconfigurations.
+
+Error Detection and Hiding - disguising error messages sent by the server.
+
+Note: Like other application security/application firewall systems, ModSecurity requires a significant commitment of staff resources for initial tuning of the rules and handling alerts. In some cases, this may require additional time working with application developers/maintainers to modify applications based on analysis of the results of tuning and monitoring logs. After setup, an ongoing commitment of staff is required for monitoring logs and ongoing tuning, especially after upgrades/patches. Without this commitment to tuning and monitoring, installing ModSecurity may NOT be effective and may provide a false sense of security.
+
+Rationale:
+
+Installing, configuring and enabling of the OWASP ModSecurity Core Rule Set (CRS), provides additional baseline security defense, and provides a good starting point to customize the monitoring and blocking of common web application attacks."
+          solution    : "Install, configure and test the OWASP ModSecurity Core Rule Set:
+
+Download the OWASP ModSecurity CRS from the project page https://www.owasp.org/index.php/Category:OWASP_ModSecurity_Core_Rule_Set_Project
+
+Unbundled the archive and follow the instructions in the INSTALL file.
+
+Depending on the CRS version used, the crs-setup.conf or the modsecurity_crs_10_setup.conf file will be required, and rules in the base_rules directory are intended as a baseline useful for most applications.
+
+Test the application for correct functionality after installing the CRS. Check web server error logs and the modsec_audit.log file for blocked requests due to false positives.
+
+It is also recommended to test the application response to malicious traffic such as an automated web application scanner to ensure the rules are active. The web server error log and modsec_audit.log files should show logs of the attacks and the servers response codes.
+
+Default Value:
+
+The OWASP ModSecurity CRS is NOT installed or enabled by default.
+
+CRS v3.0 Default Values:
+
+inbound_anomaly_score_threshold = 5
+
+outbound_anomaly_score_threshold = 4
+
+paranoia_level = 1"
+          reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|6.7,CN-L3|8.1.10.6(d),CSCv6|18.2,CSCv7|18.10,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+      </else>
+    </if>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "7.10 Ensure OCSP Stapling Is Enabled - SSLUseStapling"
+      info        : "The OCSP (Online Certificate Status Protocol) provides the current revocation status of an X.509 certificate and allows for a certificate authority to revoke the validity of a signed certificate before its expiration date. The URI for the OCSP server is included in the certificate and verified by the browser. The Apache SSLUseStapling directive along with the SSLStaplingCache directive are recommended to enable OCSP Stapling by the web server. If the client requests OCSP stapling, then the web server can include the OCSP server response along with the web server's X.509 certificate.
+
+Rationale:
+
+The OCSP protocol is a big improvement over CRLs (certificate revocation lists) for checking if a certificate has been revoked. There are however some minor privacy and efficiency concerns with OCSP. The fact that the browser has to check a third-party CA discloses that the browser is configured for OCSP checking. Also, the already high overhead of making an SSL connection is increased by the need for the OCSP requests and responses. The OCSP stapling improves the situation by having the SSL server 'staple' an OCSP response, signed by the OCSP server, to the certificate it presents to the client. This obviates the need for the client to ask the OCSP server for status information on the server certificate. However, the client will still need to make OCSP requests on any intermediate CA certificates that are typically used to sign the server's certificate."
+      solution    : "Perform the following to implement the recommended state:
+Add or modify the SSLUseStapling directive to have a value of on in the Apache server level configuration and every virtual host that is SSL enabled. Also ensure that SSLStaplingCache is set to one of the three cache types similar to the examples below.
+
+SSLUseStapling On
+SSLStaplingCache 'shmcb:logs/ssl_staple_cache(512000)'
+- or-
+SSLStaplingCache 'dbm:logs/ssl_staple_cache.db'
+- or -
+SSLStaplingCache  dc:UNIX:logs/ssl_staple_socket
+
+Default Value:
+
+SSLUseStapling Off SSLStaplingCache <no default value>"
+      reference   : "800-171|3.13.8,800-53|SC-8(1),CIS_Recommendation|7.10,CN-L3|8.1.2.2(a),CN-L3|8.1.2.2(b),CN-L3|8.1.4.7(a),CN-L3|8.1.4.8(a),CN-L3|8.2.4.5(c),CN-L3|8.2.4.5(d),CN-L3|8.5.2.2,CSCv6|14.2,CSCv7|14.4,CSF|PR.DS-2,CSF|PR.DS-5,ISO/IEC-27001|A.10.1.1,ISO/IEC-27001|A.13.2.3,ITSG-33|SC-8(1),LEVEL|2A,NESA|T7.4.1,NIAv2|NS5d,NIAv2|NS6b,QCSC-v1|5.2.2,QCSC-v1|6.2,SWIFT-CSCv1|2.1,TBA-FIISB|29.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*SSLUseStapling[\\s]+"
+      expect      : "^[\\s]*SSLUseStapling[\\s]+On[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "7.10 Ensure OCSP Stapling Is Enabled - SSLStaplingCache"
+      info        : "The OCSP (Online Certificate Status Protocol) provides the current revocation status of an X.509 certificate and allows for a certificate authority to revoke the validity of a signed certificate before its expiration date. The URI for the OCSP server is included in the certificate and verified by the browser. The Apache SSLUseStapling directive along with the SSLStaplingCache directive are recommended to enable OCSP Stapling by the web server. If the client requests OCSP stapling, then the web server can include the OCSP server response along with the web server's X.509 certificate.
+
+Rationale:
+
+The OCSP protocol is a big improvement over CRLs (certificate revocation lists) for checking if a certificate has been revoked. There are however some minor privacy and efficiency concerns with OCSP. The fact that the browser has to check a third-party CA discloses that the browser is configured for OCSP checking. Also, the already high overhead of making an SSL connection is increased by the need for the OCSP requests and responses. The OCSP stapling improves the situation by having the SSL server 'staple' an OCSP response, signed by the OCSP server, to the certificate it presents to the client. This obviates the need for the client to ask the OCSP server for status information on the server certificate. However, the client will still need to make OCSP requests on any intermediate CA certificates that are typically used to sign the server's certificate."
+      solution    : "Perform the following to implement the recommended state:
+Add or modify the SSLUseStapling directive to have a value of on in the Apache server level configuration and every virtual host that is SSL enabled. Also ensure that SSLStaplingCache is set to one of the three cache types similar to the examples below.
+
+SSLUseStapling On
+SSLStaplingCache 'shmcb:logs/ssl_staple_cache(512000)'
+- or-
+SSLStaplingCache 'dbm:logs/ssl_staple_cache.db'
+- or -
+SSLStaplingCache  dc:UNIX:logs/ssl_staple_socket
+
+Default Value:
+
+SSLUseStapling Off SSLStaplingCache <no default value>"
+      reference   : "800-171|3.13.8,800-53|SC-8(1),CIS_Recommendation|7.10,CN-L3|8.1.2.2(a),CN-L3|8.1.2.2(b),CN-L3|8.1.4.7(a),CN-L3|8.1.4.8(a),CN-L3|8.2.4.5(c),CN-L3|8.2.4.5(d),CN-L3|8.5.2.2,CSCv6|14.2,CSCv7|14.4,CSF|PR.DS-2,CSF|PR.DS-5,ISO/IEC-27001|A.10.1.1,ISO/IEC-27001|A.13.2.3,ITSG-33|SC-8(1),LEVEL|2A,NESA|T7.4.1,NIAv2|NS5d,NIAv2|NS6b,QCSC-v1|5.2.2,QCSC-v1|6.2,SWIFT-CSCv1|2.1,TBA-FIISB|29.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*SSLStaplingCache[\\s]+"
+      expect      : "^[\\s]*SSLStaplingCache[\\s]+"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "7.11 Ensure HTTP Strict Transport Security Is Enabled"
+      info        : "HTTP Strict Transport Security (HSTS) is an optional web server security policy mechanism specified by an HTTP Server header. The HSTS header allows a server declaration that only HTTPS communication should be used rather than clear text HTTP communication.
+
+Rationale:
+
+Usage of HTTP Strict Transport Security (HSTS) helps protect HSTS compliant browsers and other agents from HTTP downgrade attacks. Downgrade attacks include a variety of man-in-the-middle attacks which leave the web communication vulnerable to disclosure and modification by forcing the usage of HTTP rather than HTTPS communication. The sslstrip attack tool by Moxie Marlinspike released in 2009 is one such attack, which works when the server allows both HTTP and HTTPS communication. However, a man-in-the-middle HTTP-to-HTTPS proxy would be effective in cases where the server required HTTPS, but did not publish an HSTS policy to the browser. This attack would also be effective on browsers which were not compliant with HSTS. All current up-to-date browsers support HSTS.
+
+The HSTS header specifies a length of time in seconds that the browser/user agent should access the server only using HTTPS. The header may also specify if all sub-domains should also be included in the same policy. Once a compliant browser receives the HSTS Header it will not allow access to the server via HTTP. Therefore, it is important that you ensure that there is no portion of the web site or web application that requires HTTP prior to enabling the HSTS protocol.
+
+If all sub-domains are to be included via the includeSubDomains option, then carefully consider all various host names, web applications and third-party services used to include any DNS CNAME values that may be impacted. An overly broad includeSubDomains policy will disable access to HTTP web sites for all websites with the same domain name. Also consider that the access will be disabled for the number of seconds given in the max-age value, so in the event a mistake is made, a large value, such as a year, could create significant support issues. An optional flag of preload may be added if the web site name is to be submitted to be preloaded in Chrome, Firefox and Safari browsers. See https://hstspreload.appspot.com/ for details."
+      solution    : "Perform the following to implement the recommended state:
+
+Add a Header directive as shown below in the Apache server level configuration and every virtual host that is SSL enabled. The includeSubDomains and preload flags may be included in the header, but are not required.
+
+Header always set Strict-Transport-Security 'max-age=600'; includeSubDomains; preload
+- or -
+Header always set Strict-Transport-Security 'max-age=600'
+
+Default Value:
+
+The Strict Transport Security header is not present by default."
+      reference   : "800-171|3.1.3,800-53|AC-4(3),CIS_Recommendation|7.11,CN-L3|7.1.2.2(b),CSCv6|14.2,CSCv7|14.4,CSF|DE.AE-1,CSF|ID.AM-3,CSF|PR.AC-5,CSF|PR.PT-4,ITSG-33|AC-4(3),LEVEL|2A,NESA|T4.2.1,NESA|T4.5.1,NESA|T4.5.3,NESA|T4.5.4,NESA|T5.4.6,NESA|T5.7.2,NESA|T7.5.2,NESA|T7.6.4,NIAv2|GS13,QCSC-v1|4.2,QCSC-v1|5.2.1,QCSC-v1|5.2.2,QCSC-v1|5.2.3,QCSC-v1|6.2,SWIFT-CSCv1|2.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*.+[Ss]trict-[Tt]ransport-[Ss]ecurity[\\s]+"
+      expect      : "^[\\s]*[Hh]eader[\\s]+[Aa]lways[\\s]+[Ss]et[\\s]+[Ss]trict-[Tt]ransport-[Ss]ecurity[\\s]+\"[Mm]ax-[Aa]ge=(4[8-9][0-9]|[5-9][0-9][0-9]|[\\d]{4,})\"(.*?[Pp]reload)?(.*?include[Ss]ub[Dd]omains)?[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "7.12 Ensure Only Cipher Suites That Provide Forward Secrecy Are Enabled"
+      info        : "In cryptography, forward secrecy (FS), which is also known as perfect forward secrecy (PFS), is a feature of specific key exchange protocols that give assurance that your session keys will not be compromised even if the private key of the server is compromised. Protocols such as RSA do not provide the forward secrecy, while the protocols ECDHE (Elliptic-Curve Diffie-Hellman Ephemeral) and the DHE (Diffie-Hellman Ephemeral) will provide forward secrecy. The ECDHE is the stronger protocol and should be preferred, while the DHE may be allowed for greater compatibility with older clients. The TLS ciphers should be configured to require either the ECDHE or the DHE ephemeral key exchange, while not allowing other cipher suites.
+
+Rationale:
+
+During the TLS handshake, after the initial client & server Hello, there is a pre-master secret generated, which is used to generate the master secret, and in turn generates the session key. When using protocols that do not provide forward secrecy, such as RSA, the pre-master secret is encrypted by the client with the server's public key and sent over the network. However, with protocols such as ECDHE (Elliptic-Curve Diffie-Hellman Ephemeral) the pre-master secret is not sent over the wire, even in encrypted format. The key exchange arrives at the shared secret in the clear using ephemeral keys that are not stored or used again. With FS, each session has a unique key exchange, so that future sessions are protected."
+      solution    : "Perform one of the following to implement the recommended state:
+
+Add or modify the following line in the Apache server level configuration and every virtual host that is SSL/TLS enabled:
+
+SSLCipherSuite EECDH:EDH:!NULL:!SSLv2:!RC4:!aNULL:!3DES:!IDEA
+
+The more recent versions of openssl (such as 1.0.2 and newer) will support the usage of ECDHE as a synonym for EECDH and DHE as a synonym for EDH in the cipher specification. The usage of ECDHE and DHE are preferred so that the specification matches the expected output. So, the cipher specification could be:
+
+SSLCipherSuite ECDHE:DHE:!NULL:!SSLv2:!RC4:!aNULL:!3DES:!IDEA
+
+Default Value:
+
+The default value for SSLCipherSuite depends on OpenSSL library version used."
+      reference   : "800-171|3.13.8,800-53|SC-8(1),CIS_Recommendation|7.12,CN-L3|8.1.2.2(a),CN-L3|8.1.2.2(b),CN-L3|8.1.4.7(a),CN-L3|8.1.4.8(a),CN-L3|8.2.4.5(c),CN-L3|8.2.4.5(d),CN-L3|8.5.2.2,CSCv6|14.2,CSCv7|14.4,CSCv7|18.5,CSF|PR.DS-2,CSF|PR.DS-5,ISO/IEC-27001|A.10.1.1,ISO/IEC-27001|A.13.2.3,ITSG-33|SC-8(1),LEVEL|2A,NESA|T7.4.1,NIAv2|NS5d,NIAv2|NS6b,QCSC-v1|5.2.2,QCSC-v1|6.2,SWIFT-CSCv1|2.1,TBA-FIISB|29.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*[Ss][Ss][Ll][Cc][Ii][Pp][Hh][Ee][Rr][Ss][Uu][Ii][Tt][Ee][\\s]+"
+      expect      : "^[\\s]*[Ss][Ss][Ll][Cc][Ii][Pp][Hh][Ee][Rr][Ss][Uu][Ii][Tt][Ee][\\s]+(?=.*(EECDH|ECDHE))(?=.*(EDH|DHE)).*?$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK_NOT
+      description : "8.3 Ensure All Default Apache Content Is Removed - 'httpd.conf Include conf/extra/httpd-autoindex.conf does not exists'"
+      info        : "In previous recommendations, we have removed default content such as the Apache manuals and default CGI programs. However, if you want to further restrict information leakage about the web server, it is important that default content such as icons are not left on the web server.
+
+Rationale:
+
+To identify the type of web servers and versions software installed it is common for attackers to scan for icons or special content specific to the server type and version. A simple request like http://example.com/icons/apache_pb2.png may tell the attacker that the server is Apache 2.4. Many icons are used primarily for auto indexing, which is also recommended to be disabled."
+      solution    : "Perform either of the following to implement the recommended state:
+
+The default source build places the auto-index and icon configurations in the extra/httpd-autoindex.conf file, so it can be disabled by leaving the include line commented out in the main httpd.conffile as shown below.
+
+# Fancy directory listings
+#Include conf/extra/httpd-autoindex.conf
+
+Alternatively, the icon alias directive and the directory access control configuration can be commented out as shown if present:
+
+# We include the /icons/ alias for FancyIndexed directory listings. If
+# you do not use FancyIndexing, you may comment this out.
+#
+#Alias /icons/ '/var/www/icons/'
+#<Directory '/var/www/icons'>
+#     Options Indexes MultiViews FollowSymLinks
+#     AllowOverride None
+#     Order allow,deny
+#     Allow from all
+#</Directory>
+
+Default Value:
+
+The default source build does not enable access to the Apache icons."
+      reference   : "800-53|SC-30(5),CIS_Recommendation|8.3,CSCv6|18.9,CSCv7|13.2,ITSG-33|SC-30,ITSG-33|SC-30a.,LEVEL|2A,NIAv2|GS8f,NIAv2|NS1,NIAv2|NS28"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*Include[\\s]+conf\\/extra\\/httpd-autoindex\\\.conf[\\s]*"
+      expect      : "^[\\s]*Include[\\s]+conf\\/extra\\/httpd-autoindex\\\.conf[\\s]*"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK_NOT
+      description : "8.3 Ensure All Default Apache Content Is Removed - 'httpd.conf Alias /icons/ /var/www/icons/ does not exist'"
+      info        : "In previous recommendations, we have removed default content such as the Apache manuals and default CGI programs. However, if you want to further restrict information leakage about the web server, it is important that default content such as icons are not left on the web server.
+
+Rationale:
+
+To identify the type of web servers and versions software installed it is common for attackers to scan for icons or special content specific to the server type and version. A simple request like http://example.com/icons/apache_pb2.png may tell the attacker that the server is Apache 2.4. Many icons are used primarily for auto indexing, which is also recommended to be disabled."
+      solution    : "Perform either of the following to implement the recommended state:
+
+The default source build places the auto-index and icon configurations in the extra/httpd-autoindex.conf file, so it can be disabled by leaving the include line commented out in the main httpd.conffile as shown below.
+
+# Fancy directory listings
+#Include conf/extra/httpd-autoindex.conf
+
+Alternatively, the icon alias directive and the directory access control configuration can be commented out as shown if present:
+
+# We include the /icons/ alias for FancyIndexed directory listings. If
+# you do not use FancyIndexing, you may comment this out.
+#
+#Alias /icons/ '/var/www/icons/'
+#<Directory '/var/www/icons'>
+#     Options Indexes MultiViews FollowSymLinks
+#     AllowOverride None
+#     Order allow,deny
+#     Allow from all
+#</Directory>
+
+Default Value:
+
+The default source build does not enable access to the Apache icons."
+      reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|8.3,CN-L3|8.1.10.6(d),CSCv6|18.9,CSCv7|13.2,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*Alias[\\s]+\\/icons\\/[\\s]+\"\\/var\\/www\\/icons\\/\"[\\s]*"
+      expect      : "^[\\s]*Alias[\\s]+\\/icons\\/[\\s]+\"\\/var\\/www\\/icons\\/\"[\\s]*"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK_NOT
+      description : "8.4 Ensure ETag Response Header Fields Do Not Include Inodes"
+      info        : "The FileETag directive configures the file attributes that are used to create the ETag (entity tag) response header field when the document is based on a static file. The ETag value is used in cache management to save network bandwidth. The value returned may be based on combinations of the file inode, the modification time, and the file size.
+
+Rationale:
+
+When the FileETag is configured to include the file inode number, remote attackers may be able to discern the inode number from returned values. The inode is considered sensitive information, as it could be useful in assisting in other attacks."
+      solution    : "Perform the following to implement the recommended state:
+
+Remove all instances of the FileETag directive. Alternatively, add or modify the FileETag directive in the server and each virtual host configuration to have either the value None or MTime Size.
+
+Default Value:
+
+The default value is MTime Size."
+      reference   : "800-171|3.4.2,800-53|CM-6b.,CIS_Recommendation|8.4,CN-L3|8.1.10.6(d),CSCv6|18.9,CSCv7|13.2,CSF|PR.IP-1,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*FileETag[\\s]+.*([Aa]ll|[Ii][Nn]ode).*"
+      expect      : "^[\\s]*FileETag[\\s]+.*([Aa]ll|[Ii][Nn]ode).*"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "10.1 Ensure the LimitRequestLine directive is Set to 512 or less"
+      info        : "Buffer Overflow attacks attempt to exploit an application by providing more data than the application buffer can contain. If the application allows copying data to the buffer to overflow the boundaries of the buffer, then the application is vulnerable to a buffer overflow. The results of Buffer overflow vulnerabilities vary, and may result in the application crashing, or may allow the attacker to execute instructions provided in the data. The Apache LimitRequest* directives allow the Apache web server to limit the sizes of requests and request fields and can be used to help protect programs and applications processing those requests.
+
+Specifically, the LimitRequestLine directive limits the allowed size of a client's HTTP request-line, which consists of the HTTP method, URI, and protocol version.
+
+Rationale:
+
+The limiting of the size of the request line is helpful so that the web server can prevent an unexpectedly long or large request from being passed to a potentially vulnerable CGI program, module or application that would have attempted to process the request. Of course, the underlying dependency is that we need to set the limits high enough to not interfere with any one application on the server, while setting them low enough to be of value in protecting the applications. Since the configuration directive is available only at the server configuration level, it is not possible to tune the value for different portions of the same web server. Please read the Apache documentation carefully, as these requests may interfere with the expected functionality of some web applications."
+      solution    : "Perform the following to implement the recommended state:
+
+Add or modify the LimitRequestline directive in the Apache configuration to have a value of 512 or shorter.
+
+LimitRequestline 512
+
+Default Value:
+
+LimitRequestline 8190"
+      reference   : "800-53|SC-5.,CIS_Recommendation|10.1,CSCv6|9,CSCv7|5.1,CSF|DE.CM-1,CSF|PR.DS-4,ITSG-33|SC-5,ITSG-33|SC-5a.,LEVEL|2A,NESA|T3.3.1,NIAv2|GS8e,NIAv2|GS10c,QCSC-v1|8.2.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*LimitRequestLine[\\s]*"
+      expect      : "^[\\s]*LimitRequestLine[\\s]+(51[0-2]|50[0-9]|[1-4][0-9][0-9]|[1-9][0-9]|[1-9])[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "10.2 Ensure the LimitRequestFields Directive is Set to 100 or Less"
+      info        : "The LimitRequestFields directive limits the number of fields allowed in an HTTP request.
+
+Rationale:
+
+The limiting of the number of fields is helpful so that the web server can prevent an unexpectedly high number of fields from being passed to a potentially vulnerable CGI program, module or application that would have attempted to process the request. Of course, the underlying dependency is that we need to set the limits high enough to not interfere with any one application on the server, while setting them low enough to be of value in protecting the applications. Since the configuration directives are available only at the server configuration level, it is not possible to tune the value for different portions of the same web server. Please read the Apache documentation carefully, as these requests may interfere with the expected functionality of some web applications."
+      solution    : "Perform the following to implement the recommended state:
+
+Add or modify the LimitRequestFields directive in the Apache configuration to have a value of 100 or less. If the directive is not present the default depends on a compile time configuration, but defaults to a value of 100.
+
+LimitRequestFields 100
+
+Default Value:
+
+LimitRequestFields 100"
+      reference   : "800-53|SC-5.,CIS_Recommendation|10.2,CSCv6|9,CSCv7|5.1,CSF|DE.CM-1,CSF|PR.DS-4,ITSG-33|SC-5,ITSG-33|SC-5a.,LEVEL|2A,NESA|T3.3.1,NIAv2|GS8e,NIAv2|GS10c,QCSC-v1|8.2.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*LimitRequestFields[\\s]+"
+      expect      : "^[\\s]*LimitRequestFields[\\s]+(100|[1-9][0-9]|[1-9])[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "10.3 Ensure the LimitRequestFieldsize Directive is Set to 1024 or Less"
+      info        : "The LimitRequestFieldSize limits the number of bytes that will be allowed in an HTTP request header. It is recommended that the LimitRequestFieldSize directive be set to 1024 or less.
+
+Rationale:
+
+By limiting of the size of request headers is helpful so that the web server can prevent an unexpectedly long or large value from being passed to exploit a potentially vulnerable program. Of course, the underlying dependency is that we need to set the limits high enough to not interfere with any one application on the server, while setting them low enough to be of value in protecting the applications. Since the configuration directives are available only at the server configuration level, it is not possible to tune the value for different portions of the same web server. Please read the Apache documentation carefully, as these requests may interfere with the expected functionality of some web applications."
+      solution    : "Perform the following to implement the recommended state:
+
+Add or modify the LimitRequestFieldsize directive in the Apache configuration to have a value of 1024 or less.
+
+LimitRequestFieldsize 1024
+
+Default Value:
+
+LimitRequestFieldsize 8190"
+      reference   : "800-53|SC-5.,CIS_Recommendation|10.3,CSCv6|9,CSCv7|5.1,CSF|DE.CM-1,CSF|PR.DS-4,ITSG-33|SC-5,ITSG-33|SC-5a.,LEVEL|2A,NESA|T3.3.1,NIAv2|GS8e,NIAv2|GS10c,QCSC-v1|8.2.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*LimitRequestFieldSize[\\s]*"
+      expect      : "^[\\s]*LimitRequestFieldSize[\\s]+(102[0-4]|10[0-1][0-9]|[1-9][0-9][0-9]|[1-9][0-9]|[1-9])[\\s]*$"
+    </custom_item>
+
+    <custom_item>
+      system      : "Linux"
+      type        : FILE_CONTENT_CHECK
+      description : "10.4 Ensure the LimitRequestBody Directive is Set to 102400 or Less"
+      info        : "The LimitRequestBody directive limits the number of bytes that are allowed in a request body. Size of requests may vary greatly; for example, during a file upload the size of the file must fit within this limit.
+
+Rationale:
+
+The limiting of the size of the request body is helpful so that the web server can prevent an unexpectedly long or large request from being passed to a potentially vulnerable program. Of course, the underlying dependency is that we need to set the limits high enough to not interfere with any one application on the server, while setting them low enough to be of value in protecting the applications. The LimitRequestBody may be configured on a per directory, or per location context. Please read the Apache documentation carefully, as these requests may interfere with the expected functionality of some web applications."
+      solution    : "Perform the following to implement the recommended state:
+
+Add or modify the LimitRequestBody directive in the Apache configuration to have a value of 102400 (100K) or less. Please read the Apache documentation so that it is understood that this directive will limit the size of file up-loads to the web server.
+
+LimitRequestBody 102400
+
+Default Value:
+
+LimitRequestBody 0 (unlimited)"
+      reference   : "800-53|SC-5.,CIS_Recommendation|10.4,CSCv6|9,CSCv7|5.1,CSF|DE.CM-1,CSF|PR.DS-4,ITSG-33|SC-5,ITSG-33|SC-5a.,LEVEL|2A,NESA|T3.3.1,NIAv2|GS8e,NIAv2|GS10c,QCSC-v1|8.2.1"
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_CONF_LOCATION@ replaced with "/etc/httpd/conf/httpd.conf" in field "file".
+      file        : "/etc/httpd/conf/httpd.conf"
+      regex       : "^[\\s]*LimitRequestBody[\\s]*"
+      expect      : "^[\\s]*LimitRequestBody[\\s]+(102400|102[1-3][0-9][0-9]|10[0-1][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9]|[1-9])[\\s]*$"
+    </custom_item>
+
+    <if>
+      <condition type:"OR">
+        <custom_item>
+          type        : RPM_CHECK
+          description : "Check for SELinux - RPM"
+          rpm         : "libselinux-0.0.0-0"
+          operator    : "gt"
+          required    : YES
+        </custom_item>
+
+        <custom_item>
+          type        : RPM_CHECK
+          description : "Check for SELinux1 - RPM"
+          rpm         : "libselinux1-0.0.0-0"
+          operator    : "gt"
+          required    : YES
+        </custom_item>
+
+        <custom_item>
+          type        : CMD_EXEC
+          description : "Check for SELinux - dpkg"
+          cmd         : "/usr/bin/dpkg -s libselinux1 2>&1"
+          expect      : "^[\\s]*Status: install ok installed[\\s]*"
+        </custom_item>
+      </condition>
+
+      <then>
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "11.1 Ensure SELinux Is Enabled in Enforcing Mode - current"
+          info        : "SELinux (Security-Enhanced Linux) is a Linux kernel security module that provides mandatory access control security policies with type enforcement that are checked after the traditional discretionary access controls. It was created by the US National Security Agency and can enforce rules on files and processes in a Linux system, and restrict actions, based on defined policies.
+
+Rationale:
+
+Web applications and services continue to be one of the leading attack vectors for black-hat criminals to gain access to information and servers. The threat is high because web servers are often externally accessible and typically have the greatest share of server-side vulnerabilities. The SELinux mandatory access controls provide a much stronger security model which can be used to implement a deny-by-default model which only allows what is explicitly permitted."
+          solution    : "Perform the following to implement the recommended state:
+
+If SELinux is not enabled in the configuration file, edit the file /etc/selinux/config and set the value of SELINUX as enforcing and reboot the system for the new configuration to be effective.
+
+SELINUX=enforcing
+
+If the current mode is not enforcing, and an immediate reboot is not possible, the current mode can be set to enforcing with the setenable command shown below.
+
+# setenforce 1
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.1,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+          cmd         : "/usr/sbin/sestatus"
+          expect      : "^[\\s]*Current[\\s]+mode[\\s]*:[\\s]*enforcing[\\s]*$"
+        </custom_item>
+
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "11.1 Ensure SELinux Is Enabled in Enforcing Mode - config"
+          info        : "SELinux (Security-Enhanced Linux) is a Linux kernel security module that provides mandatory access control security policies with type enforcement that are checked after the traditional discretionary access controls. It was created by the US National Security Agency and can enforce rules on files and processes in a Linux system, and restrict actions, based on defined policies.
+
+Rationale:
+
+Web applications and services continue to be one of the leading attack vectors for black-hat criminals to gain access to information and servers. The threat is high because web servers are often externally accessible and typically have the greatest share of server-side vulnerabilities. The SELinux mandatory access controls provide a much stronger security model which can be used to implement a deny-by-default model which only allows what is explicitly permitted."
+          solution    : "Perform the following to implement the recommended state:
+
+If SELinux is not enabled in the configuration file, edit the file /etc/selinux/config and set the value of SELINUX as enforcing and reboot the system for the new configuration to be effective.
+
+SELINUX=enforcing
+
+If the current mode is not enforcing, and an immediate reboot is not possible, the current mode can be set to enforcing with the setenable command shown below.
+
+# setenforce 1
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.1,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+          cmd         : "/usr/sbin/sestatus"
+          expect      : "^[\\s]*Mode[\\s]+from[\\s]+config[\\s]+file[\\s]*:[\\s]*enforcing[\\s]*$"
+        </custom_item>
+
+        <custom_item>
+          type        : CMD_EXEC
+          description : "11.2 Ensure Apache Processes Run in the httpd_t Confined Context - apachectl"
+          info        : "SELinux includes customizable targeted policies that may be used to confine the Apache httpd server to enforce least privileges so that the httpd server has only the minimal access to specified directories, files and network ports. Access is controlled by process types (domains) defined for the httpd process. There are over a hundred individual httpd related types defined in a default Apache SELinux policy which includes many of the common Apache add-ons and applications such as php, nagios, smokeping and many others. The default SELinux policies work well for a default Apache installation, but implementation of SELinux targeted polices on a complex or highly customized web server requires a rather significant development and testing effort which comprehends both the workings of SELinux and the detailed operations and requirements of the web application.
+
+All directories and files to be accessed by the web server process must have security labels with appropriate types. The following types are a sample of the most commonly used:
+
+http_port_t - Network ports allowed for listening
+
+httpd_sys_content_t - Read access to directories and files with web content
+
+httpd_log_t - Directories and files to be used for writable log data
+
+httpd_sys_script_exec_t - Directories and files for executable content.
+
+Rationale:
+
+With the proper implementation of SELinux, vulnerabilities in the web application may be prevented from being exploited due to the additional restrictions. For example, a vulnerability that allows an attacker to read inappropriate system files may be prevented from execution by SELinux because the inappropriate files are not labeled as httpd_sys_content_t. Likewise writing to an unexpected directory or execution of unexpected content can be prevented by similar mandatory security labels enforced by SELinux."
+          solution    : "If the running httpd processes are not confined to the httpd_t SELinux context. Then check the context for the httpd binary and the apachectl binary and set the httpd binary to have a context of httpd_exec_t and the apachectl executable should have a context of initrc_exec_t as shown below. Also note that on some platforms such as Ubuntu, the Apache executable is named apache2 instead of httpd.
+
+# ls -alZ /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:initrc_exec_t:s0 /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.worker
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.event
+
+If the executable files are not labeled correctly, they may be relabeled with the chcon command, as shown, however the file system labeling is based on the SELinux file context polices and the file systems will on some occasions be relabeled according to the policy.
+
+# chcon -t initrc_exec_t /usr/sbin/apachectl
+# chcon -t httpd_exec_t /usr/sbin/httpd /usr/sbin/httpd.*
+
+Since the file system may be relabeled based on SELinux policy, it's best to check the SELinux policy with semanage fcontext -l option. If the policy is not present, then add the pattern to the policy using the -a option. The restorecon command shown below will restore the file context label according to the current policy, which is required if a pattern was added.
+
+# ### Check the Policy
+# semanage fcontext -l | fgrep 'apachectl'
+/usr/sbin/apachectl regular file system_u:object_r:initrc_exec_t:s0
+# semanage fcontext -l | fgrep '/usr/sbin/httpd'
+/usr/sbin/httpd regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.worker regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.event regular file system_u:object_r:httpd_exec_t:s0
+# ### Add to the policy, if not present
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.worker'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.event'
+# semanage fcontext -f -- -a -t initrc_exec_t /usr/sbin/apachectl
+
+# ### Restore the file labeling accord to the SELinux policy
+# restorecon -v /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.2,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.6,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @APACHECTL_LOCATION@ replaced with "/usr/sbin/apachectl" in field "cmd".
+          cmd         : "/usr/bin/ls -lZ /usr/sbin/apachectl"
+# Note: Variable @APACHECTL_LOCATION@ replaced with "/usr/sbin/apachectl" in field "expect".
+          expect      : ":initrc_exec_t:.* /usr/sbin/apachectl"
+        </custom_item>
+
+        <custom_item>
+          type        : CMD_EXEC
+          description : "11.2 Ensure Apache Processes Run in the httpd_t Confined Context - httpd"
+          info        : "SELinux includes customizable targeted policies that may be used to confine the Apache httpd server to enforce least privileges so that the httpd server has only the minimal access to specified directories, files and network ports. Access is controlled by process types (domains) defined for the httpd process. There are over a hundred individual httpd related types defined in a default Apache SELinux policy which includes many of the common Apache add-ons and applications such as php, nagios, smokeping and many others. The default SELinux policies work well for a default Apache installation, but implementation of SELinux targeted polices on a complex or highly customized web server requires a rather significant development and testing effort which comprehends both the workings of SELinux and the detailed operations and requirements of the web application.
+
+All directories and files to be accessed by the web server process must have security labels with appropriate types. The following types are a sample of the most commonly used:
+
+http_port_t - Network ports allowed for listening
+
+httpd_sys_content_t - Read access to directories and files with web content
+
+httpd_log_t - Directories and files to be used for writable log data
+
+httpd_sys_script_exec_t - Directories and files for executable content.
+
+Rationale:
+
+With the proper implementation of SELinux, vulnerabilities in the web application may be prevented from being exploited due to the additional restrictions. For example, a vulnerability that allows an attacker to read inappropriate system files may be prevented from execution by SELinux because the inappropriate files are not labeled as httpd_sys_content_t. Likewise writing to an unexpected directory or execution of unexpected content can be prevented by similar mandatory security labels enforced by SELinux."
+          solution    : "If the running httpd processes are not confined to the httpd_t SELinux context. Then check the context for the httpd binary and the apachectl binary and set the httpd binary to have a context of httpd_exec_t and the apachectl executable should have a context of initrc_exec_t as shown below. Also note that on some platforms such as Ubuntu, the Apache executable is named apache2 instead of httpd.
+
+# ls -alZ /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:initrc_exec_t:s0 /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.worker
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.event
+
+If the executable files are not labeled correctly, they may be relabeled with the chcon command, as shown, however the file system labeling is based on the SELinux file context polices and the file systems will on some occasions be relabeled according to the policy.
+
+# chcon -t initrc_exec_t /usr/sbin/apachectl
+# chcon -t httpd_exec_t /usr/sbin/httpd /usr/sbin/httpd.*
+
+Since the file system may be relabeled based on SELinux policy, it's best to check the SELinux policy with semanage fcontext -l option. If the policy is not present, then add the pattern to the policy using the -a option. The restorecon command shown below will restore the file context label according to the current policy, which is required if a pattern was added.
+
+# ### Check the Policy
+# semanage fcontext -l | fgrep 'apachectl'
+/usr/sbin/apachectl regular file system_u:object_r:initrc_exec_t:s0
+# semanage fcontext -l | fgrep '/usr/sbin/httpd'
+/usr/sbin/httpd regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.worker regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.event regular file system_u:object_r:httpd_exec_t:s0
+# ### Add to the policy, if not present
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.worker'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.event'
+# semanage fcontext -f -- -a -t initrc_exec_t /usr/sbin/apachectl
+
+# ### Restore the file labeling accord to the SELinux policy
+# restorecon -v /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-53|AC-3.,CIS_Recommendation|11.2,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.6,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3,LEVEL|2A,NESA|T4.2.1,NESA|T5.4.4,NESA|T5.4.5,NESA|T5.5.4,NESA|T5.6.1,NESA|T7.5.2,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+# Note: Variable @HTTPD_LOCATION@ replaced with "/usr/sbin/httpd" in field "cmd".
+          cmd         : "/usr/bin/ps -eZ | /usr/bin/grep $(basename /usr/sbin/httpd)"
+          expect      : ":httpd_t:"
+        </custom_item>
+
+        <custom_item>
+          system        : "Linux"
+          type          : CMD_EXEC
+          description   : "11.3 Ensure the httpd_t Type is Not in Permissive Mode"
+          info          : "In addition to setting the entire SELinux configuration in permissive mode, it is possible to set individual process types (domains) such as httpd_t into a permissive mode as well. The permissive mode will not prevent any access or actions, instead, any actions that would have been denied are simply logged.
+
+Rationale:
+
+Usage of the permissive mode is helpful for testing and ensuring that SELinux will not prevent access that is necessary for the proper function of a web application. However, all access is allowed in permissive mode by SELinux."
+          solution      : "Perform the following to implement the recommended state:
+
+If the httpd_t type is in permissive mode; the customized permissive mode should be deleted with the following semanage command.
+
+# semanage permissive -d httpd_t
+
+Default Value:
+
+The httpd_t type is not in permissive mode by default."
+          reference     : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.3,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.6,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also      : "https://workbench.cisecurity.org/files/3021"
+          cmd           : "/usr/sbin/semodule -l | /usr/bin/grep permissive_httpd_t | /usr/bin/awk -F: '{ print $NF } END {if (NR == 0) print \"none\"}'"
+          expect        : "none"
+          dont_echo_cmd : YES
+        </custom_item>
+
+        <custom_item>
+          system        : "Linux"
+          type          : CMD_EXEC
+          description   : "11.4 Ensure Only the Necessary SELinux Booleans are Enabled"
+          info          : "SELinux booleans allow or disallow behavior specific to the Apache web server. Common examples include whether CGI execution is allowed, or if the httpd server is allowed to communicate with the current terminal (tty). Communication with the terminal, may be necessary for entering a passphrase during start up to decrypt a private key.
+
+Rationale:
+
+Enabling only the necessary httpd related booleans provides a defense in depth approach, that will deny actions that are not in use or expected.
+
+NOTE: Nessus has provided the target output to assist in reviewing the benchmark to ensure target compliance."
+          solution      : "Perform the following to implement the recommended state:
+
+To disable the SELinux httpd booleans that are determined to be unnecessary, use the setsebool command as shown below with the -P option to make the change persistent.
+
+# setsebool -P httpd_enable_cgi off
+# getsebool httpd_enable_cgi
+httpd_enable_cgi --> off
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference     : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.4,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|18,CSCv7|9.2,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2M,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also      : "https://workbench.cisecurity.org/files/3021"
+          cmd           : "/usr/sbin/getsebool -a | /usr/bin/grep httpd_ | /usr/bin/grep '> on'"
+          expect        : ""
+          dont_echo_cmd : YES
+          severity      : MEDIUM
+        </custom_item>
+
+        <report type:"PASSED">
+          description : "12.1 Ensure the AppArmor Framework Is Enabled"
+          info        : "AppArmor is a Linux kernel security module that provides a named based mandatory access control with security policies. AppArmor can enforce rules on programs for file access and network connections and restrict actions based on defined policies.
+
+Rationale:
+
+Web applications and web services continue to be one of the leading attack vectors for black-hat criminals to gain access to information and servers. The threat is high because web servers are often externally accessible and typically have the greatest share of server-side vulnerabilities. The AppArmor mandatory access controls provide a much stronger security model which can be used to implement a deny-by-default model which only allows what is explicitly permitted."
+          solution    : "Perform the following to implement the recommended state:
+
+If the aa-status command is not found, then the AppArmor package is not installed and needs to be installed using the appropriate the Linux distribution package management. For example:
+
+# apt-get install apparmor
+# apt-get install libapache2-mod-apparmor
+
+To enable the AppArmor framework run the init.d script as shown below.
+
+# /etc/init.d/apparmor start
+
+Default Value:
+
+AppArmor is enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|12.1,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|2.2,CSCv7|2.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "12.2 Ensure the Apache AppArmor Profile Is Configured Properly"
+          info        : "AppArmor includes customizable profiles that may be used to confine the Apache web server to enforce least privileges so that the server has only the minimal access to specified directories, files and network ports. Access is controlled by a profile defined for the apache2 process. The default AppArmor profile is typically a very permissive profile that allows read-write access to all system files. Therefore, it's important that the default profile be customized to enforce least privileges. The AppArmor utilities such as aa-autodep, aa-complain, and aa-logprof can be used to generate an initial profile based on actual usage. However thorough testing, review and customization will be necessary to ensure that the Apache profile restrictions allow necessary functionality while implementing least privilege.
+
+Rationale:
+
+With the proper implementation of AppArmor profile, vulnerabilities in the web application may be prevented from being exploited due to the additional restrictions. For example, a vulnerability that allows an attacker to read an inappropriate system files may be prevented from execution by AppArmor because the inappropriate files are not allowed by the profile. Likewise writing to an unexpected directory or execution of unexpected content can be prevented by similar mandatory security controls enforced by AppArmor."
+          solution    : "Perform the following to implement the recommended state:
+
+Stop the Apache server
+
+# service apache2 stop
+
+Create a mostly empty apache2 profile based on program dependencies.
+
+# aa-autodep apache2
+Writing updated profile for /usr/sbin/apache2.
+
+Set the apache2 profile in complain mode so that access violations will be allowed and logged.
+
+# aa-complain apache2
+Setting /usr/sbin/apache2 to complain mode.
+
+Start the apache2 service
+
+# service apache2 start
+
+Thoroughly test the web application attempting to exercise all intended functionality so that AppArmor will generate the necessary logs of all resources accessed. The logs are sent via the system syslog utility and are typically found in either the /var/log/syslog or /var/log/messages files. Also stop and restart the web server as part of the testing process.
+
+Use aa-logprof to update the profile based on logs generated during the testing. The tool will prompt for suggested modifications to the profile, based on the logs. The logs may also be reviewed manually in order to update the profile.
+
+# aa-logprof
+
+Review and edit the profile, removing any inappropriate content, and adding appropriate access rules. Directories with multiple files accessed with the same permission can be simplified with the usage of wild-cards when appropriate. Reload the updated profile using the apparmor_parser command.
+
+# apparmor_parser -r /etc/apparmor.d/usr.sbin.apache2
+
+Test the new updated profile again and check for any new AppArmor denied logs generated. Update and reload the profile as necessary. Repeat the application tests, until no new AppArmor deny logs are created, except for access which should be prohibited.
+
+# tail -f /var/log/syslog
+
+Set the apache2 profile to enforce mode, reload AppArmor, and then test the web site functionality again.
+
+# aa-enforce /usr/sbin/apache2
+# /etc/init.d/apparmor reload
+
+Default Value:
+
+The default Apache profile is very permissive."
+          reference   : "CSCv6|2,CSCv7|14.7,LEVEL|2M,CIS_Recommendation|12.2"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "12.3 Ensure Apache AppArmor Profile is in Enforce Mode"
+          info        : "AppArmor profiles may be in one of three modes: disabled, complain or enforce. In the complain mode, any violations of the access controls are logged but the restrictions are not enforced. Also, once a profile mode has been changed, it is recommended to restart the Apache server, otherwise the currently running process may not be confined by the policy.
+
+Rationale:
+
+The complain mode is useful for testing and debugging a profile, but is not appropriate for production. Only the confined process running in enforce mode will prevent attacks that violate the configured access controls."
+          solution    : "Perform the following to implement the recommended state:
+
+Set the profile state to enforce mode.
+
+# aa-enforce apache2
+Setting /usr/sbin/apache2 to enforce mode.
+
+Stop the Apache server and confirm that is it not running. In some cases, the AppArmor controls may prevent the web server from stopping properly, and it may be necessary to stop the process manually or even reboot the server.
+
+# service apache2 stop
+ * Stopping web server apache2
+# service apache2 status
+ * apache2 is not running
+
+Restart the Apache service.
+
+# service apache2 start
+ * Starting web server apache2
+
+Default Value:
+
+The default mode is enforce."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|12.3,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|2.2,CSCv7|2.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+      </then>
+
+      <else>
+        <report type:"PASSED">
+          description : "11.1 Ensure SELinux Is Enabled in Enforcing Mode - current"
+          info        : "SELinux (Security-Enhanced Linux) is a Linux kernel security module that provides mandatory access control security policies with type enforcement that are checked after the traditional discretionary access controls. It was created by the US National Security Agency and can enforce rules on files and processes in a Linux system, and restrict actions, based on defined policies.
+
+Rationale:
+
+Web applications and services continue to be one of the leading attack vectors for black-hat criminals to gain access to information and servers. The threat is high because web servers are often externally accessible and typically have the greatest share of server-side vulnerabilities. The SELinux mandatory access controls provide a much stronger security model which can be used to implement a deny-by-default model which only allows what is explicitly permitted."
+          solution    : "Perform the following to implement the recommended state:
+
+If SELinux is not enabled in the configuration file, edit the file /etc/selinux/config and set the value of SELINUX as enforcing and reboot the system for the new configuration to be effective.
+
+SELINUX=enforcing
+
+If the current mode is not enforcing, and an immediate reboot is not possible, the current mode can be set to enforcing with the setenable command shown below.
+
+# setenforce 1
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.1,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "11.1 Ensure SELinux Is Enabled in Enforcing Mode - config"
+          info        : "SELinux (Security-Enhanced Linux) is a Linux kernel security module that provides mandatory access control security policies with type enforcement that are checked after the traditional discretionary access controls. It was created by the US National Security Agency and can enforce rules on files and processes in a Linux system, and restrict actions, based on defined policies.
+
+Rationale:
+
+Web applications and services continue to be one of the leading attack vectors for black-hat criminals to gain access to information and servers. The threat is high because web servers are often externally accessible and typically have the greatest share of server-side vulnerabilities. The SELinux mandatory access controls provide a much stronger security model which can be used to implement a deny-by-default model which only allows what is explicitly permitted."
+          solution    : "Perform the following to implement the recommended state:
+
+If SELinux is not enabled in the configuration file, edit the file /etc/selinux/config and set the value of SELINUX as enforcing and reboot the system for the new configuration to be effective.
+
+SELINUX=enforcing
+
+If the current mode is not enforcing, and an immediate reboot is not possible, the current mode can be set to enforcing with the setenable command shown below.
+
+# setenforce 1
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.1,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "11.2 Ensure Apache Processes Run in the httpd_t Confined Context - apachectl"
+          info        : "SELinux includes customizable targeted policies that may be used to confine the Apache httpd server to enforce least privileges so that the httpd server has only the minimal access to specified directories, files and network ports. Access is controlled by process types (domains) defined for the httpd process. There are over a hundred individual httpd related types defined in a default Apache SELinux policy which includes many of the common Apache add-ons and applications such as php, nagios, smokeping and many others. The default SELinux policies work well for a default Apache installation, but implementation of SELinux targeted polices on a complex or highly customized web server requires a rather significant development and testing effort which comprehends both the workings of SELinux and the detailed operations and requirements of the web application.
+
+All directories and files to be accessed by the web server process must have security labels with appropriate types. The following types are a sample of the most commonly used:
+
+http_port_t - Network ports allowed for listening
+
+httpd_sys_content_t - Read access to directories and files with web content
+
+httpd_log_t - Directories and files to be used for writable log data
+
+httpd_sys_script_exec_t - Directories and files for executable content.
+
+Rationale:
+
+With the proper implementation of SELinux, vulnerabilities in the web application may be prevented from being exploited due to the additional restrictions. For example, a vulnerability that allows an attacker to read inappropriate system files may be prevented from execution by SELinux because the inappropriate files are not labeled as httpd_sys_content_t. Likewise writing to an unexpected directory or execution of unexpected content can be prevented by similar mandatory security labels enforced by SELinux."
+          solution    : "If the running httpd processes are not confined to the httpd_t SELinux context. Then check the context for the httpd binary and the apachectl binary and set the httpd binary to have a context of httpd_exec_t and the apachectl executable should have a context of initrc_exec_t as shown below. Also note that on some platforms such as Ubuntu, the Apache executable is named apache2 instead of httpd.
+
+# ls -alZ /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:initrc_exec_t:s0 /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.worker
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.event
+
+If the executable files are not labeled correctly, they may be relabeled with the chcon command, as shown, however the file system labeling is based on the SELinux file context polices and the file systems will on some occasions be relabeled according to the policy.
+
+# chcon -t initrc_exec_t /usr/sbin/apachectl
+# chcon -t httpd_exec_t /usr/sbin/httpd /usr/sbin/httpd.*
+
+Since the file system may be relabeled based on SELinux policy, it's best to check the SELinux policy with semanage fcontext -l option. If the policy is not present, then add the pattern to the policy using the -a option. The restorecon command shown below will restore the file context label according to the current policy, which is required if a pattern was added.
+
+# ### Check the Policy
+# semanage fcontext -l | fgrep 'apachectl'
+/usr/sbin/apachectl regular file system_u:object_r:initrc_exec_t:s0
+# semanage fcontext -l | fgrep '/usr/sbin/httpd'
+/usr/sbin/httpd regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.worker regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.event regular file system_u:object_r:httpd_exec_t:s0
+# ### Add to the policy, if not present
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.worker'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.event'
+# semanage fcontext -f -- -a -t initrc_exec_t /usr/sbin/apachectl
+
+# ### Restore the file labeling accord to the SELinux policy
+# restorecon -v /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.2,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.6,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "11.2 Ensure Apache Processes Run in the httpd_t Confined Context - httpd"
+          info        : "SELinux includes customizable targeted policies that may be used to confine the Apache httpd server to enforce least privileges so that the httpd server has only the minimal access to specified directories, files and network ports. Access is controlled by process types (domains) defined for the httpd process. There are over a hundred individual httpd related types defined in a default Apache SELinux policy which includes many of the common Apache add-ons and applications such as php, nagios, smokeping and many others. The default SELinux policies work well for a default Apache installation, but implementation of SELinux targeted polices on a complex or highly customized web server requires a rather significant development and testing effort which comprehends both the workings of SELinux and the detailed operations and requirements of the web application.
+
+All directories and files to be accessed by the web server process must have security labels with appropriate types. The following types are a sample of the most commonly used:
+
+http_port_t - Network ports allowed for listening
+
+httpd_sys_content_t - Read access to directories and files with web content
+
+httpd_log_t - Directories and files to be used for writable log data
+
+httpd_sys_script_exec_t - Directories and files for executable content.
+
+Rationale:
+
+With the proper implementation of SELinux, vulnerabilities in the web application may be prevented from being exploited due to the additional restrictions. For example, a vulnerability that allows an attacker to read inappropriate system files may be prevented from execution by SELinux because the inappropriate files are not labeled as httpd_sys_content_t. Likewise writing to an unexpected directory or execution of unexpected content can be prevented by similar mandatory security labels enforced by SELinux."
+          solution    : "If the running httpd processes are not confined to the httpd_t SELinux context. Then check the context for the httpd binary and the apachectl binary and set the httpd binary to have a context of httpd_exec_t and the apachectl executable should have a context of initrc_exec_t as shown below. Also note that on some platforms such as Ubuntu, the Apache executable is named apache2 instead of httpd.
+
+# ls -alZ /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:initrc_exec_t:s0 /usr/sbin/apachectl
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.worker
+-rwxr-xr-x. root root system_u:object_r:httpd_exec_t:s0 /usr/sbin/httpd.event
+
+If the executable files are not labeled correctly, they may be relabeled with the chcon command, as shown, however the file system labeling is based on the SELinux file context polices and the file systems will on some occasions be relabeled according to the policy.
+
+# chcon -t initrc_exec_t /usr/sbin/apachectl
+# chcon -t httpd_exec_t /usr/sbin/httpd /usr/sbin/httpd.*
+
+Since the file system may be relabeled based on SELinux policy, it's best to check the SELinux policy with semanage fcontext -l option. If the policy is not present, then add the pattern to the policy using the -a option. The restorecon command shown below will restore the file context label according to the current policy, which is required if a pattern was added.
+
+# ### Check the Policy
+# semanage fcontext -l | fgrep 'apachectl'
+/usr/sbin/apachectl regular file system_u:object_r:initrc_exec_t:s0
+# semanage fcontext -l | fgrep '/usr/sbin/httpd'
+/usr/sbin/httpd regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.worker regular file system_u:object_r:httpd_exec_t:s0
+/usr/sbin/httpd.event regular file system_u:object_r:httpd_exec_t:s0
+# ### Add to the policy, if not present
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.worker'
+# semanage fcontext -f -- -a -t httpd_exec_t '/usr/sbin/httpd.event'
+# semanage fcontext -f -- -a -t initrc_exec_t /usr/sbin/apachectl
+
+# ### Restore the file labeling accord to the SELinux policy
+# restorecon -v /usr/sbin/httpd /usr/sbin/httpd.* /usr/sbin/apachectl
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-53|AC-3.,CIS_Recommendation|11.2,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.6,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3,LEVEL|2A,NESA|T4.2.1,NESA|T5.4.4,NESA|T5.4.5,NESA|T5.5.4,NESA|T5.6.1,NESA|T7.5.2,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "11.3 Ensure the httpd_t Type is Not in Permissive Mode"
+          info        : "In addition to setting the entire SELinux configuration in permissive mode, it is possible to set individual process types (domains) such as httpd_t into a permissive mode as well. The permissive mode will not prevent any access or actions, instead, any actions that would have been denied are simply logged.
+
+Rationale:
+
+Usage of the permissive mode is helpful for testing and ensuring that SELinux will not prevent access that is necessary for the proper function of a web application. However, all access is allowed in permissive mode by SELinux."
+          solution    : "Perform the following to implement the recommended state:
+
+If the httpd_t type is in permissive mode; the customized permissive mode should be deleted with the following semanage command.
+
+# semanage permissive -d httpd_t
+
+Default Value:
+
+The httpd_t type is not in permissive mode by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.3,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|14.4,CSCv7|14.6,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <report type:"PASSED">
+          description : "11.4 Ensure Only the Necessary SELinux Booleans are Enabled"
+          info        : "SELinux booleans allow or disallow behavior specific to the Apache web server. Common examples include whether CGI execution is allowed, or if the httpd server is allowed to communicate with the current terminal (tty). Communication with the terminal, may be necessary for entering a passphrase during start up to decrypt a private key.
+
+Rationale:
+
+Enabling only the necessary httpd related booleans provides a defense in depth approach, that will deny actions that are not in use or expected."
+          solution    : "Perform the following to implement the recommended state:
+
+To disable the SELinux httpd booleans that are determined to be unnecessary, use the setsebool command as shown below with the -P option to make the change persistent.
+
+# setsebool -P httpd_enable_cgi off
+# getsebool httpd_enable_cgi
+httpd_enable_cgi --> off
+
+Default Value:
+
+SELinux is not enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|11.4,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|18,CSCv7|9.2,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2M,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "12.1 Ensure the AppArmor Framework Is Enabled"
+          info        : "AppArmor is a Linux kernel security module that provides a named based mandatory access control with security policies. AppArmor can enforce rules on programs for file access and network connections and restrict actions based on defined policies.
+
+Rationale:
+
+Web applications and web services continue to be one of the leading attack vectors for black-hat criminals to gain access to information and servers. The threat is high because web servers are often externally accessible and typically have the greatest share of server-side vulnerabilities. The AppArmor mandatory access controls provide a much stronger security model which can be used to implement a deny-by-default model which only allows what is explicitly permitted."
+          solution    : "Perform the following to implement the recommended state:
+
+If the aa-status command is not found, then the AppArmor package is not installed and needs to be installed using the appropriate the Linux distribution package management. For example:
+
+# apt-get install apparmor
+# apt-get install libapache2-mod-apparmor
+
+To enable the AppArmor framework run the init.d script as shown below.
+
+# /etc/init.d/apparmor start
+
+Default Value:
+
+AppArmor is enabled by default."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|12.1,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|2.2,CSCv7|2.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+          cmd         : "/usr/sbin/aa-status"
+          expect      : "^[\\s]*apparmor[\\s]+module[\\s]+is[\\s]+loaded"
+        </custom_item>
+
+        <report type:"WARNING">
+          description : "12.2 Ensure the Apache AppArmor Profile Is Configured Properly"
+          info        : "AppArmor includes customizable profiles that may be used to confine the Apache web server to enforce least privileges so that the server has only the minimal access to specified directories, files and network ports. Access is controlled by a profile defined for the apache2 process. The default AppArmor profile is typically a very permissive profile that allows read-write access to all system files. Therefore, it's important that the default profile be customized to enforce least privileges. The AppArmor utilities such as aa-autodep, aa-complain, and aa-logprof can be used to generate an initial profile based on actual usage. However thorough testing, review and customization will be necessary to ensure that the Apache profile restrictions allow necessary functionality while implementing least privilege.
+
+Rationale:
+
+With the proper implementation of AppArmor profile, vulnerabilities in the web application may be prevented from being exploited due to the additional restrictions. For example, a vulnerability that allows an attacker to read an inappropriate system files may be prevented from execution by AppArmor because the inappropriate files are not allowed by the profile. Likewise writing to an unexpected directory or execution of unexpected content can be prevented by similar mandatory security controls enforced by AppArmor.
+
+NOTE: Nessus has not performed this check. Please review the benchmark to ensure target compliance."
+          solution    : "Perform the following to implement the recommended state:
+
+Stop the Apache server
+
+# service apache2 stop
+
+Create a mostly empty apache2 profile based on program dependencies.
+
+# aa-autodep apache2
+Writing updated profile for /usr/sbin/apache2.
+
+Set the apache2 profile in complain mode so that access violations will be allowed and logged.
+
+# aa-complain apache2
+Setting /usr/sbin/apache2 to complain mode.
+
+Start the apache2 service
+
+# service apache2 start
+
+Thoroughly test the web application attempting to exercise all intended functionality so that AppArmor will generate the necessary logs of all resources accessed. The logs are sent via the system syslog utility and are typically found in either the /var/log/syslog or /var/log/messages files. Also stop and restart the web server as part of the testing process.
+
+Use aa-logprof to update the profile based on logs generated during the testing. The tool will prompt for suggested modifications to the profile, based on the logs. The logs may also be reviewed manually in order to update the profile.
+
+# aa-logprof
+
+Review and edit the profile, removing any inappropriate content, and adding appropriate access rules. Directories with multiple files accessed with the same permission can be simplified with the usage of wild-cards when appropriate. Reload the updated profile using the apparmor_parser command.
+
+# apparmor_parser -r /etc/apparmor.d/usr.sbin.apache2
+
+Test the new updated profile again and check for any new AppArmor denied logs generated. Update and reload the profile as necessary. Repeat the application tests, until no new AppArmor deny logs are created, except for access which should be prohibited.
+
+# tail -f /var/log/syslog
+
+Set the apache2 profile to enforce mode, reload AppArmor, and then test the web site functionality again.
+
+# aa-enforce /usr/sbin/apache2
+# /etc/init.d/apparmor reload
+
+Default Value:
+
+The default Apache profile is very permissive."
+          reference   : "CSCv6|2,CSCv7|14.7,LEVEL|2M,CIS_Recommendation|12.2"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+        </report>
+
+        <custom_item>
+          system      : "Linux"
+          type        : CMD_EXEC
+          description : "12.3 Ensure Apache AppArmor Profile is in Enforce Mode"
+          info        : "AppArmor profiles may be in one of three modes: disabled, complain or enforce. In the complain mode, any violations of the access controls are logged but the restrictions are not enforced. Also, once a profile mode has been changed, it is recommended to restart the Apache server, otherwise the currently running process may not be confined by the policy.
+
+Rationale:
+
+The complain mode is useful for testing and debugging a profile, but is not appropriate for production. Only the confined process running in enforce mode will prevent attacks that violate the configured access controls."
+          solution    : "Perform the following to implement the recommended state:
+
+Set the profile state to enforce mode.
+
+# aa-enforce apache2
+Setting /usr/sbin/apache2 to enforce mode.
+
+Stop the Apache server and confirm that is it not running. In some cases, the AppArmor controls may prevent the web server from stopping properly, and it may be necessary to stop the process manually or even reboot the server.
+
+# service apache2 stop
+ * Stopping web server apache2
+# service apache2 status
+ * apache2 is not running
+
+Restart the Apache service.
+
+# service apache2 start
+ * Starting web server apache2
+
+Default Value:
+
+The default mode is enforce."
+          reference   : "800-171|3.1.1,800-171|3.1.2,800-53|AC-3(3),CIS_Recommendation|12.3,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv6|2.2,CSCv7|2.7,CSF|PR.AC-4,CSF|PR.PT-3,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3(3),LEVEL|2A,NESA|T5.5.4,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+          see_also    : "https://workbench.cisecurity.org/files/3021"
+          cmd         : "/usr/sbin/aa-unconfined --paranoid | /usr/bin/grep apache2"
+          expect      : ".*\/usr\/sbin\/apache2[\\s]*confined[\\s]*by[\\s]*'\/usr\/sbin\/apache2[\\s]*\\(enforce\\)'"
+        </custom_item>
+      </else>
+    </if>
+  </then>
+
+  <else>
+    <report type:"WARNING">
+      description : "CIS_Apache_HTTP_Server_2.4_Benchmark_v2.0.0.audit from CIS Apache HTTP Server 2.4 Benchark v2.0.0"
+      info        : "NOTE: Nessus has not identified that the chosen audit applies to the target device."
+      see_also    : "https://workbench.cisecurity.org/files/3021"
+    </report>
+  </else>
+</if>
+
+</check_type>
