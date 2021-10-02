@@ -3,6 +3,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtPrintSupport import *
 from PyQt5.QtPrintSupport import QPrintDialog
+from functools import partial
+
 
 import os
 import sys
@@ -17,6 +19,10 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout()
         self.editor = QPlainTextEdit()  # Could also use a QTextEdit and set self.editor.setAcceptRichText(False)
+        self.resize(600, 450)
+        self.number_of_instances = 0
+        self.tree_window = None
+        self.information = 0
 
         # Setup the QTextEdit editor configuration
         fixedfont = QFontDatabase.systemFont(QFontDatabase.FixedFont)
@@ -36,32 +42,23 @@ class MainWindow(QMainWindow):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
 
-        file_toolbar = QToolBar("File")
-        file_toolbar.setIconSize(QSize(14, 14))
-        self.addToolBar(file_toolbar)
         file_menu = self.menuBar().addMenu("&File")
 
         open_file_action = QAction(QIcon(os.path.join('images', 'blue-folder-open-document.png')), "Open file...", self)
         open_file_action.setStatusTip("Open file")
         open_file_action.triggered.connect(self.file_open)
         file_menu.addAction(open_file_action)
-        file_toolbar.addAction(open_file_action)
 
         save_file_action = QAction(QIcon(os.path.join('images', 'disk.png')), "Save", self)
         save_file_action.setStatusTip("Save current page")
         save_file_action.triggered.connect(self.file_save)
         file_menu.addAction(save_file_action)
-        file_toolbar.addAction(save_file_action)
 
         saveas_file_action = QAction(QIcon(os.path.join('images', 'disk--pencil.png')), "Save As...", self)
         saveas_file_action.setStatusTip("Save current page to specified file")
         saveas_file_action.triggered.connect(self.file_saveas)
         file_menu.addAction(saveas_file_action)
-        file_toolbar.addAction(saveas_file_action)
 
-        edit_toolbar = QToolBar("Edit")
-        edit_toolbar.setIconSize(QSize(16, 16))
-        self.addToolBar(edit_toolbar)
         edit_menu = self.menuBar().addMenu("&Edit")
 
         undo_action = QAction(QIcon(os.path.join('images', 'arrow-curve-180-left.png')), "Undo", self)
@@ -72,7 +69,6 @@ class MainWindow(QMainWindow):
         redo_action = QAction(QIcon(os.path.join('images', 'arrow-curve.png')), "Redo", self)
         redo_action.setStatusTip("Redo last change")
         redo_action.triggered.connect(self.editor.redo)
-        edit_toolbar.addAction(redo_action)
         edit_menu.addAction(redo_action)
 
         edit_menu.addSeparator()
@@ -80,20 +76,33 @@ class MainWindow(QMainWindow):
         cut_action = QAction(QIcon(os.path.join('images', 'scissors.png')), "Cut", self)
         cut_action.setStatusTip("Cut selected text")
         cut_action.triggered.connect(self.editor.cut)
-        edit_toolbar.addAction(cut_action)
         edit_menu.addAction(cut_action)
 
         copy_action = QAction(QIcon(os.path.join('images', 'document-copy.png')), "Copy", self)
         copy_action.setStatusTip("Copy selected text")
         copy_action.triggered.connect(self.editor.copy)
-        edit_toolbar.addAction(copy_action)
         edit_menu.addAction(copy_action)
 
         paste_action = QAction(QIcon(os.path.join('images', 'clipboard-paste-document-text.png')), "Paste", self)
         paste_action.setStatusTip("Paste from clipboard")
         paste_action.triggered.connect(self.editor.paste)
-        edit_toolbar.addAction(paste_action)
         edit_menu.addAction(paste_action)
+
+        ############################################################################################################
+
+        search_toolbar = QToolBar("Search")
+        search_toolbar.setIconSize(QSize(20, 20))
+        self.addToolBar(search_toolbar)
+
+        search_action = QAction("Search", self)
+        search_action.triggered.connect(self.show_new_window)
+        search_action.setStatusTip("Search button")
+        search_toolbar.addAction(search_action)
+
+        refresh_action = QAction("Refresh", self)
+        refresh_action.triggered.connect(self.update_file_text)
+        refresh_action.setStatusTip("Refresh button")
+        search_toolbar.addAction(refresh_action)
 
         self.update_title()
         self.show()
@@ -110,15 +119,39 @@ class MainWindow(QMainWindow):
         if path:
             try:
                 with open(path) as f:
-                    text = f.read()
-
+                    text = f.readlines()
+                text = self.transform_to_json_format(str(text))
             except Exception as e:
                 self.dialog_critical(str(e))
 
             else:
                 self.path = path
-                self.editor.setPlainText(text)
+                self.editor.setPlainText(json.dumps(text, indent=4, sort_keys=True))
                 self.update_title()
+
+    def transform_to_json_format(self, text):
+
+        lines = re.sub('\n', '', text)
+        lines = re.findall('<custom_item>(.*?)<\/custom_item>', lines)
+
+        li = []
+        for element in lines:
+
+            mapper = {}
+            element = re.sub('\n', '', element)
+            element = re.sub('\s+', ' ', element)
+
+            element = element.strip()
+            element = re.findall('(\w+)\s:\s(\w+ |".*?")', element)
+
+            for key, value in element:
+                mapper[key] = value
+            li.append(mapper)
+
+        self.number_of_instances = len(li)
+        self.information = li
+        print(self.number_of_instances)
+        return li
 
     def file_save(self):
         if self.path is None:
@@ -140,43 +173,184 @@ class MainWindow(QMainWindow):
 
         text = self.editor.toPlainText()
 
-        # lines = AuditParser.open_file(self)
-        lines = re.sub('\n', '', text)
-        lines = re.findall('<custom_item>(.*?)<\/custom_item>', lines)
-
-        li = []
-
-        for element in lines:
-
-            mapper = {}
-            element = re.sub('\n', '', element)
-            element = re.sub('\s+', ' ', element)
-
-            element = element.strip()
-            element = re.findall('(\w+)\s:\s(\w+ |".*?")', element)
-
-            for key, value in element:
-                mapper[key] = value
-            li.append(mapper)
-
         try:
-
             name_of_json = re.findall('\/(\w+).json', path)[0]
             with open(f'{name_of_json}.json', 'w') as outfile:
-                json.dump(li, outfile)
+                json.dump(text, outfile)
 
         except Exception as e:
             self.dialog_critical(str(e))
 
         else:
             self.path = path
-            # self.update_title()
 
     def update_title(self):
         self.setWindowTitle("%s - No2Pads" % (os.path.basename(self.path) if self.path else "Untitled"))
 
     def edit_toggle_wrap(self):
         self.editor.setLineWrapMode(1 if self.editor.lineWrapMode() == 0 else 0)
+
+    def search_in_txt(self):
+        txt_to_search = self.lineEdit.text()
+        try:
+            result = self.plainTextEdit_2.find(txt_to_search)
+            if not result:
+                # move cursor to the beginning and restart search
+                self.plainTextEdit_2.moveCursor(QTextCursor.Start)
+                self.plainTextEdit_2.find(txt_to_search)
+        except:
+            self.statusbar.showMessage("This is the last iteration founded")
+        return
+
+    def show_new_window(self):
+        try:
+
+            self.tree_window = Window(self.path, self.number_of_instances, self.information)
+            self.tree_window.show()
+            if self.tree_window.block_count:
+                self.update_file_text
+        except:
+            print('No information uploaded')
+
+    def update_file_text(self):
+
+        new_information = []
+        if self.tree_window.block_count:
+            for element in self.tree_window.block_count:
+                new_information.append(self.information[element])
+
+            self.information = new_information
+            self.editor.setPlainText(json.dumps(self.information, indent=4, sort_keys=True))
+
+
+class Window(QWidget):
+    def __init__(self, path, number_of_instances, information):
+        super().__init__()
+        self.path = re.findall(r'[^\/]+(?=\.)', path)[0]
+        self.number_of_instances = number_of_instances
+        self.information = information
+        self.setWindowTitle(self.path)
+        self.resize(400, 100)
+        # Create an outer layout
+        outerLayout = QVBoxLayout()
+        # Create a form layout for the label and line edit
+        topLayout = QFormLayout()
+        self.block_count = []
+        self.search_block = []
+
+        # Add a label and a line edit to the form layout
+        self.lineEdit = QLineEdit(self)
+        self.lineEdit.setStatusTip('Search and mark the block that contain the syntax')
+        topLayout.addRow("Search:", self.lineEdit)
+
+        # Create a layout for the checkboxes
+        optionsLayout = QVBoxLayout()
+        # Add some checkboxes to the layout
+        groupBox = QGroupBox("Content")
+
+        self.checkBoxes = []
+        for i in range(self.number_of_instances):
+            checkBox = QCheckBox(f"Block - {i}")
+            optionsLayout.addWidget(checkBox)
+            self.checkBoxes.append(checkBox)
+
+        self.checkBoxNone = QCheckBox("Select none")
+        self.checkBoxNone.setCheckState(Qt.Unchecked)
+        self.checkBoxNone.stateChanged.connect(
+            partial(self.selectBoxes, False))
+        optionsLayout.addWidget(self.checkBoxNone)
+
+        self.checkBoxAll = QCheckBox("Select All")
+        self.checkBoxAll.setCheckState(Qt.PartiallyChecked)
+        self.checkBoxAll.stateChanged.connect(
+            partial(self.selectBoxes, True))
+        optionsLayout.addWidget(self.checkBoxAll)
+
+        groupBox.setLayout(optionsLayout)
+        scroll = QScrollArea()
+        scroll.setWidget(groupBox)
+        scroll.setWidgetResizable(True)
+        scroll.setFixedHeight(400)
+        outerLayout.addWidget(scroll)
+        # Button to records the indexes that where chosen
+        btn = QPushButton("Apply and Close", self)
+        btn.setToolTip("Close Application")
+        btn.clicked.connect(self.checkStates_block_index)
+        topLayout.addWidget(btn)
+
+        btn_line = QPushButton("Search text", self)
+        # btn_line.setToolTip("Close Application")
+
+        btn_line.clicked.connect(self.search_text_blocks)
+
+        topLayout.addWidget(btn_line)
+
+        outerLayout.addLayout(topLayout)
+        outerLayout.addLayout(optionsLayout)
+
+        # Set the window's main layout
+        self.setLayout(outerLayout)
+
+    def search_text_blocks(self):
+
+        self.checkBoxNone.setCheckState(Qt.PartiallyChecked)
+
+        for check in self.checkBoxes:
+            check.setCheckState(Qt.Unchecked)
+        # self.checkBoxAll.setCheckState(Qt.PartiallyChecked)
+        # self.checkStates()
+        text = self.lineEdit.text()
+        # print(type(self.information))
+        count = 0
+        for element in self.information:
+            find_match = re.search(text, str(element).lower())
+            if find_match is not None:
+                self.search_block.append(count)
+            count += 1
+
+        for index_check in self.search_block:
+            self.checkBoxes[index_check].setCheckState(Qt.Checked)
+
+    def checkStates_block_index(self):
+        states = [c.isChecked() for c in self.checkBoxes]
+        count = 0
+        for i in states:
+            if i:
+                self.block_count.append(count)
+            count += 1
+        print(self.block_count)
+
+    def checkStates(self):
+        states = [c.isChecked() for c in self.checkBoxes]
+
+        # temporarily block signals so that there is no recursive calls
+        self.checkBoxAll.blockSignals(True)
+        self.checkBoxNone.blockSignals(True)
+
+        # set the "select all" fully checked too if all boxes are checked,
+        # otherwise make it partially checked
+        self.checkBoxAll.setCheckState(
+            Qt.Checked if all(states) else Qt.PartiallyChecked)
+
+        # set the "select none" unchecked only if all boxes are unchecked,
+        # otherwise make it partially checked
+        self.checkBoxNone.setCheckState(
+            Qt.Unchecked if not any(states) else Qt.PartiallyChecked)
+
+        # unblock signals back
+        self.checkBoxAll.blockSignals(False)
+        self.checkBoxNone.blockSignals(False)
+
+    def selectBoxes(self, state):
+        # states = [c.isChecked() for c in self.checkBoxes]
+
+        for check in self.checkBoxes:
+
+            # print(check)
+            check.blockSignals(True)
+            check.setChecked(state)
+            check.blockSignals(False)
+        self.checkStates()
 
 
 if __name__ == '__main__':
