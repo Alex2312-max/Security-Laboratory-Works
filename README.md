@@ -18,3 +18,15 @@ Save json:
 
 Confirming the results by checking the json file in a json viewer online:
 <img src='data/json_check.png'>
+
+
+Laboratory Work Nr. 3
+
+Audit file check:
+
+![image](https://user-images.githubusercontent.com/55151032/142918137-c68aa4fc-1ab7-4ef3-865a-604ae7082f1e.png)
+
+Code snippet:
+
+![image](https://user-images.githubusercontent.com/55151032/142918279-dba26340-a89f-455a-a723-73fc2bef429d.png)
+
