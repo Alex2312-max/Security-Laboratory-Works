@@ -1,6 +1,6 @@
 # Security-Laboratory-Works
 
-1 Laboratory Work
+### Laboratory Work 1:
 
 Created a GUI:
 
@@ -20,7 +20,7 @@ Confirming the results by checking the json file in a json viewer online:
 <img src='data/json_check.png'>
 
 
-Laboratory Work Nr. 3
+### Laboratory Work Nr. 3
 
 Audit file check:
 
