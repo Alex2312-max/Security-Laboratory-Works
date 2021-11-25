@@ -30,5 +30,5 @@ Code snippet:
 
 ![image](https://user-images.githubusercontent.com/55151032/142919196-72466a90-ad56-43c0-acc6-7f811731df6a.png)
 
-  Also, there is the logic in the scrips 1_Audit_Parser.py you can find the whole logic behind Audit Workstation Page
+  Also, there is the logic in the scrips main.py you can find the whole logic behind Audit Workstation Page
   that is too big to be included in here.
