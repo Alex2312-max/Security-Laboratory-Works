@@ -214,13 +214,10 @@ class MainWindow(QMainWindow):
         return
 
     def show_audit_workstation_window(self):
-        print(len(self.information), self.information)
-        # try:
-        self.audit_result_window = AuditWindow(self.path, self.information)
-        print('good')
+        text = self.editor.toPlainText()
+        text = json.loads(text)
+        self.audit_result_window = AuditWindow(self.path, text)
         self.audit_result_window.show()
-        # except:
-             # print('No information uploaded')
 
     def show_new_window(self):
         try:
@@ -244,31 +241,7 @@ class MainWindow(QMainWindow):
 
 
 class AuditWindow(QWidget):
-    # def __init__(self, path, information):
-    #     super().__init__()
-    #     self.path = re.findall(r'[^\/]+(?=\.)', path)[0]
-    #     self.number_of_instances = len(self.information)
-    #
-    #     self.information = information
-    #     self.results = []
-    #     self.setWindowTitle(self.path)
-    #     self.resize(400, 100)
-    #     self.run_cmd()
-    #     # Create an outer layout
-    #     self.layout = QVBoxLayout()
-    #
-    #     optionsLayout = QVBoxLayout()
-    #
-    #     # groupBox.setLayout(optionsLayout)
-    #
-    #     for element, result in zip(range(self.number_of_instances), self.results):
-    #         label = QLabel(f"Block{element} - {result}")
-    #         optionsLayout.addWidget(label)
-    #
-    #     self.layout.addLayout(optionsLayout)
-    #     # Set the window's main layout
-    #     self.setLayout(self.layout)
-    #     self.show()
+
     def __init__(self, path, information):
         super().__init__()
         self.path = re.findall(r'[^\/]+(?=\.)', path)[0]
@@ -285,10 +258,6 @@ class AuditWindow(QWidget):
         self.policies_check = []
 
         self.run_cmd()
-        # Add a label and a line edit to the form layout
-        # self.lineEdit = QLineEdit(self)
-        # self.lineEdit.setStatusTip('Search and mark the block that contain the syntax')
-        # topLayout.addRow(":", self.lineEdit)
 
         # Create a layout for the checkboxes
         optionsLayout = QVBoxLayout()
@@ -298,12 +267,12 @@ class AuditWindow(QWidget):
         self.checkBoxes = []
         for i, policy_status in zip(range(self.number_of_instances), self.policies_check):
             if policy_status == 'Passed':
-                checkBox = QCheckBox(f"Block - {i} ____ Policy Status: {policy_status}")
+                checkBox = QCheckBox(f"Block - {i} ____ Policy Status")
                 checkBox.setStyleSheet('color : green')
                 optionsLayout.addWidget(checkBox)
                 self.checkBoxes.append(checkBox)
             else:
-                checkBox = QCheckBox(f"Block - {i} ____ Policy Status: {policy_status}")
+                checkBox = QCheckBox(f"Block - {i} ____ Policy Status")
                 checkBox.setStyleSheet('color : red')
                 optionsLayout.addWidget(checkBox)
                 self.checkBoxes.append(checkBox)
@@ -327,15 +296,15 @@ class AuditWindow(QWidget):
         scroll.setFixedHeight(400)
         outerLayout.addWidget(scroll)
 
-        # Button to records the indexes that where chosen
-        btn = QPushButton("Apply", self)
-        btn.setToolTip("Apply changes")
-        btn.clicked.connect(self.run_cmd)
-        topLayout.addWidget(btn)
+        btn_enforce = QPushButton("Enforce", self)
+        btn_enforce.setToolTip("Enforce policies")
+        btn_enforce.clicked.connect(self.enforce)
+        topLayout.addWidget(btn_enforce)
 
-        # btn_line = QPushButton("Check policies", self)
-        # btn_line.clicked.connect(self.run_cmd)
-        # topLayout.addWidget(btn_line)
+        btn_rollback = QPushButton("Rollback", self)
+        btn_rollback.setToolTip("Cancel all the changes")
+        btn_rollback.clicked.connect(self.rollback)
+        topLayout.addWidget(btn_rollback)
 
         outerLayout.addLayout(topLayout)
         outerLayout.addLayout(optionsLayout)
@@ -371,14 +340,42 @@ class AuditWindow(QWidget):
             check.blockSignals(False)
         self.checkStates()
 
+    def cmdline(self, command):
+        process = subprocess.Popen(
+            args=command,
+            stdout=subprocess.PIPE,
+            shell=True
+        )
+        return process.communicate()[0]
+
+    def enforce(self):
+        for block, box in zip(self.information, self.checkBoxes):
+            try:
+                if type(block['load']) != 'str':
+                    for command in block['load']:
+                        out = self.cmdline(command)
+                else:
+                    out = self.cmdline(block['load'])
+                box.setStyleSheet('color : green')
+            except:
+                print('No valid entries')
+
+    def rollback(self):
+        for block, box in zip(self.information, self.checkBoxes):
+            if box['unload']:
+                out = self.cmdline(block['unload'])
+                box.setStyleSheet('color : red')
+            else:
+                print('No valid entry.')
+
     def run_cmd(self):
         for block in self.information:
 
             try:
-                out = os.system(block['cmd'])
+                out = self.cmdline(block['cmd'])
                 out_filtered = re.search('(\w+)|(\d+)', out)
                 expected_filter = re.search('(\w+)|(\d+)', block['expec'])
-                # if out == block['expect']:
+
                 if any(element in expected_filter for element in out_filtered):
                     self.policies_check.append('Passed')
                 else:
@@ -394,6 +391,7 @@ class Window(QWidget):
         self.number_of_instances = number_of_instances
         self.information = information
 
+        print(information)
         self.setWindowTitle(self.path)
         self.resize(400, 100)
         # Create an outer layout
