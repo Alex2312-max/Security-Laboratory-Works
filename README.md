@@ -50,3 +50,12 @@ Audit policies enforce:
   needed policies, and introducing the new key-value pair in the dictionary 'unload', we can rollback to previous settings and this will
   be shown by changing in colors, for green the policie is installed and for red it is not installed.
 
+### Laboratory Work Nr. 6
+
+![image](https://user-images.githubusercontent.com/55151032/143725261-c50ce789-51d3-4af2-bffa-56076b6a0c22.png)
+
+3 buttons that represent the login procedure.
+
+SimpleLogin:
+
+![image](https://user-images.githubusercontent.com/55151032/143725278-22807025-03a2-4158-aeff-07ef87ffb110.png)
