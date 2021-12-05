@@ -59,3 +59,15 @@ Audit policies enforce:
 SimpleLogin:
 
 ![image](https://user-images.githubusercontent.com/55151032/143725278-22807025-03a2-4158-aeff-07ef87ffb110.png)
+
+### Laboratory Work Nr. 7
+
+  The laboratory work is implemented in mongoDB_viewer.py and it consists of 3 classes, the first class EncryptingData
+  reads a json file, generates a secret key stored in a file and encrypts the data, also it creates the mongoDB database
+  and inserts the data. 
+  
+  ![image](https://user-images.githubusercontent.com/55151032/144760647-867f7139-634f-41dc-a2b2-66acd36c5288.png)
+
+  Code snippet with 2 functions, one for data encryption and another for creating and inserting the data in MongoDB database.
+  
+  Other 2 classes are responsible for GUI and data representation in form of a table.
