@@ -62,7 +62,7 @@ SimpleLogin:
 
 ### Laboratory Work Nr. 7
 
-  The laboratory work is implemented in mongoDB_viewer.py and it consists of 3 classes, the first class EncryptingData
+  The laboratory work is implemented in `mongoDB_viewer.py` and it consists of 3 classes, the first `class EncryptingData`
   reads a json file, generates a secret key stored in a file and encrypts the data, also it creates the mongoDB database
   and inserts the data. 
   
